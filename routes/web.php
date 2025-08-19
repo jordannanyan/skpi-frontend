@@ -4,6 +4,10 @@ use Illuminate\Support\Facades\Route;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Session;
+use App\Http\Controllers\Fakultas\ProfileController as FakultasProfileController;
+use App\Http\Controllers\Prodi\ProfileController     as ProdiProfileController;
+use App\Http\Controllers\Mahasiswa\ProfileController as MahasiswaProfileController;
+use App\Http\Controllers\Superadmin\ProfileController as SA_ProfileController;
 use App\Http\Controllers\Superadmin\MahasiswaController;
 use App\Http\Controllers\Superadmin\FakultasController;
 use App\Http\Controllers\Superadmin\ProdiController;
@@ -24,7 +28,6 @@ use App\Http\Controllers\Fakultas\FakultasCplSkorController;
 use App\Http\Controllers\Fakultas\FakultasIsiCapaianController;
 use App\Http\Controllers\Fakultas\FakultasKategoriController;
 use App\Http\Controllers\Fakultas\FakultasPengajuanController;
-use App\Http\Controllers\Fakultas\FakultasPengesahanController;
 use App\Http\Controllers\Fakultas\FakultasTugasAkhirController;
 use App\Http\Controllers\Fakultas\FakultasKerjaPraktekController;
 use App\Http\Controllers\Fakultas\FakultasSertifikasiController;
@@ -36,24 +39,34 @@ use App\Http\Controllers\Prodi\ProdiCplSkorController;
 use App\Http\Controllers\Prodi\ProdiIsiCapaianController;
 use App\Http\Controllers\Prodi\ProdiKategoriController;
 use App\Http\Controllers\Prodi\ProdiPengajuanController;
-use App\Http\Controllers\Prodi\ProdiPengesahanController;
 use App\Http\Controllers\Prodi\ProdiTugasAkhirController;
 use App\Http\Controllers\Prodi\ProdiKerjaPraktekController;
 use App\Http\Controllers\Prodi\ProdiSertifikasiController;
 
 use App\Http\Controllers\Mahasiswa\MahasiswaPengajuanController;
-use App\Http\Controllers\Mahasiswa\MahasiswaPengesahanController;
 use App\Http\Controllers\Mahasiswa\MahasiswaTugasAkhirController;
 use App\Http\Controllers\Mahasiswa\MahasiswaKerjaPraktekController;
 use App\Http\Controllers\Mahasiswa\MahasiswaSertifikasiController;
 
-$apiBaseUrl = 'http://127.0.0.1:8000/api'; // <- deklarasi satu kali saja
+// Pastikan gunakan controller yang sesuai role-nya:
+use App\Http\Controllers\Superadmin\PengesahanController as SA_PengesahanController;
+use App\Http\Controllers\Fakultas\FakultasPengesahanController;
+use App\Http\Controllers\Prodi\ProdiPengesahanController;
+use App\Http\Controllers\Mahasiswa\MahasiswaPengesahanController;
+
+// Batasi semua {id} menjadi angka
+Route::pattern('id', '[0-9]+');
+
+$apiBaseUrl = 'http://127.0.0.1:8000/api'; // tetap satu tempat
+
+// ========== AUTH ==========
 
 Route::get('/', function () {
-    if (Session::has('token')) {
-        return redirect('/dashboard');
+    // Jika sudah login, arahkan ke dashboard sesuai role
+    if (Session::has('token') && Session::has('role')) {
+        $role = Session::get('role');
+        return redirect()->to("/{$role}/dashboard");
     }
-
     return view('auth.login');
 })->name('login');
 
@@ -63,10 +76,9 @@ Route::post('/', function (Request $request) use ($apiBaseUrl) {
     $request->validate([
         'username' => 'required|string',
         'password' => 'required|string',
-        'role' => 'required|in:superadmin,fakultas,prodi,mahasiswa',
+        'role'     => 'required|in:superadmin,fakultas,prodi,mahasiswa',
     ]);
 
-    // Endpoint sesuai role
     $url = match ($role) {
         'superadmin' => '/login/superadmin',
         'fakultas'   => '/login/fakultas',
@@ -79,47 +91,59 @@ Route::post('/', function (Request $request) use ($apiBaseUrl) {
     if ($response->successful()) {
         $data = $response->json();
 
-        // Simpan token dan role
         Session::put('token', $data['token']);
-        Session::put('role', $data['role']);
+        Session::put('role',  $data['role']);
 
-        // Simpan nama user sesuai role
         if ($role === 'superadmin') {
             Session::put('name', $data['user']['username']);
-            Session::put('id', $data['user']['id_super_admin']);
+            Session::put('id',   $data['user']['id_super_admin']);
         } else {
             Session::put('nama_' . $role, $data['user']['nama_' . $role]);
-            Session::put('id', $data['user']['id_'. $role]);
+            Session::put('id', $data['user']['id_' . $role]);
         }
 
-        // Redirect ke dashboard masing-masing role
-        return redirect("/$role/dashboard");
+        return redirect("/{$role}/dashboard");
     }
 
     return back()->withErrors(['login' => 'Username atau password salah.']);
 })->name('custom.login');
 
-
-Route::get('/superadmin/dashboard', function () {
-    return view('superadmin.dashboard');
-})->middleware('web');
-
-Route::get('/fakultas/dashboard', function () {
-    return view('fakultas.dashboard');
-})->middleware('web');
-
-Route::get('/prodi/dashboard', function () {
-    return view('prodi.dashboard');
-})->middleware('web');
-
-Route::get('/mahasiswa/dashboard', function () {
-    return view('mahasiswa.dashboard');
-})->middleware('web');
-
 Route::post('/logout', function () {
-    Session::flush(); // Remove all session data
+    Session::flush();
     return redirect()->route('login');
 })->name('logout');
+
+// ========== DASHBOARD ==========
+Route::get('/superadmin/dashboard', fn () => view('superadmin.dashboard'))->middleware('web');
+Route::get('/fakultas/dashboard',   fn () => view('fakultas.dashboard'))->middleware('web');
+Route::get('/prodi/dashboard',      fn () => view('prodi.dashboard'))->middleware('web');
+Route::get('/mahasiswa/dashboard',  fn () => view('mahasiswa.dashboard'))->middleware('web');
+
+
+Route::prefix('superadmin')->name('superadmin.')->group(function () {
+    Route::get('/profile', [SA_ProfileController::class, 'show'])->name('profile.show');
+    Route::put('/profile', [SA_ProfileController::class, 'update'])->name('profile.update');
+});
+
+// FakULTAS
+Route::prefix('fakultas')->name('fakultas.')->group(function () {
+    Route::get('/profile', [FakultasProfileController::class, 'show'])->name('profile.show');
+    Route::put('/profile', [FakultasProfileController::class, 'update'])->name('profile.update');
+});
+
+// PRODI
+Route::prefix('prodi')->name('prodi.')->group(function () {
+    Route::get('/profile', [ProdiProfileController::class, 'show'])->name('profile.show');
+    Route::put('/profile', [ProdiProfileController::class, 'update'])->name('profile.update');
+});
+
+// MAHASISWA
+Route::prefix('mahasiswa')->name('mahasiswa.')->group(function () {
+    Route::get('/profile', [MahasiswaProfileController::class, 'show'])->name('profile.show');
+    Route::put('/profile', [MahasiswaProfileController::class, 'update'])->name('profile.update');
+});
+
+
 
 Route::prefix('superadmin/mahasiswa')->name('superadmin.mahasiswa.')->group(function () {
     Route::get('/', [MahasiswaController::class, 'index'])->name('index');
@@ -233,6 +257,11 @@ Route::prefix('superadmin/sertifikasi')->name('superadmin.sertifikasi.')->group(
     Route::get('/{id}/edit', [SertifikasiController::class, 'edit'])->name('edit');
     Route::put('/{id}', [SertifikasiController::class, 'update'])->name('update');
     Route::delete('/{id}', [SertifikasiController::class, 'destroy'])->name('destroy');
+
+    // NEW: halaman khusus per-kategori (slug)
+    Route::get('/kategori/{kategori}', [SertifikasiController::class, 'index'])
+        ->where('kategori', 'keahlian|pelatihan-seminar-workshop|prestasi-dan-penghargaan|pengalaman-organisasi')
+        ->name('kategori');
 });
 
 Route::get('/superadmin/pengesahan/print/{id}', [PengesahanController::class, 'print'])->name('superadmin.pengesahan.print');
@@ -304,7 +333,6 @@ Route::prefix('fakultas/pengajuan')->name('fakultas.pengajuan.')->group(function
     Route::delete('/{id}', [FakultasPengajuanController::class, 'destroy'])->name('destroy');
 });
 
-
 Route::prefix('fakultas/pengesahan')->name('fakultas.pengesahan.')->group(function () {
     Route::get('/', [FakultasPengesahanController::class, 'index'])->name('index');
     Route::get('/create', [FakultasPengesahanController::class, 'create'])->name('create');
@@ -313,7 +341,6 @@ Route::prefix('fakultas/pengesahan')->name('fakultas.pengesahan.')->group(functi
     Route::put('/{id}', [FakultasPengesahanController::class, 'update'])->name('update');
     Route::delete('/{id}', [FakultasPengesahanController::class, 'destroy'])->name('destroy');
 });
-
 
 Route::prefix('fakultas/tugas-akhir')->name('fakultas.tugas_akhir.')->group(function () {
     Route::get('/', [FakultasTugasAkhirController::class, 'index'])->name('index');
@@ -342,7 +369,6 @@ Route::prefix('fakultas/sertifikasi')->name('fakultas.sertifikasi.')->group(func
     Route::delete('/{id}', [FakultasSertifikasiController::class, 'destroy'])->name('destroy');
 });
 
-Route::get('/fakultas/pengesahan/print/{id}', [FakultasPengesahanController::class, 'print'])->name('fakultas.pengesahan.print');
 
 // Prodi 
 
@@ -434,9 +460,12 @@ Route::prefix('prodi/sertifikasi')->name('prodi.sertifikasi.')->group(function (
     Route::get('/{id}/edit', [ProdiSertifikasiController::class, 'edit'])->name('edit');
     Route::put('/{id}', [ProdiSertifikasiController::class, 'update'])->name('update');
     Route::delete('/{id}', [ProdiSertifikasiController::class, 'destroy'])->name('destroy');
-});
 
-Route::get('/prodi/pengesahan/print/{id}', [ProdiPengesahanController::class, 'print'])->name('prodi.pengesahan.print');
+    // NEW: halaman khusus per-kategori (slug)
+    Route::get('/kategori/{kategori}', [ProdiSertifikasiController::class, 'index'])
+        ->where('kategori', 'keahlian|pelatihan-seminar-workshop|prestasi-dan-penghargaan|pengalaman-organisasi')
+        ->name('kategori');
+});
 
 // Mahasiswa 
 
@@ -449,14 +478,6 @@ Route::prefix('mahasiswa/pengajuan')->name('mahasiswa.pengajuan.')->group(functi
     Route::delete('/{id}', [MahasiswaPengajuanController::class, 'destroy'])->name('destroy');
 });
 
-Route::prefix('mahasiswa/pengesahan')->name('mahasiswa.pengesahan.')->group(function () {
-    Route::get('/', [MahasiswaPengesahanController::class, 'index'])->name('index');
-    Route::get('/create', [MahasiswaPengesahanController::class, 'create'])->name('create');
-    Route::post('/', [MahasiswaPengesahanController::class, 'store'])->name('store');
-    Route::get('/{id}/edit', [MahasiswaPengesahanController::class, 'edit'])->name('edit');
-    Route::put('/{id}', [MahasiswaPengesahanController::class, 'update'])->name('update');
-    Route::delete('/{id}', [MahasiswaPengesahanController::class, 'destroy'])->name('destroy');
-});
 
 Route::prefix('mahasiswa/tugas-akhir')->name('mahasiswa.tugas_akhir.')->group(function () {
     Route::get('/', [MahasiswaTugasAkhirController::class, 'index'])->name('index');
@@ -483,6 +504,40 @@ Route::prefix('mahasiswa/sertifikasi')->name('mahasiswa.sertifikasi.')->group(fu
     Route::get('/{id}/edit', [MahasiswaSertifikasiController::class, 'edit'])->name('edit');
     Route::put('/{id}', [MahasiswaSertifikasiController::class, 'update'])->name('update');
     Route::delete('/{id}', [MahasiswaSertifikasiController::class, 'destroy'])->name('destroy');
+
+    // NEW: halaman khusus per-kategori (slug)
+    Route::get('/kategori/{kategori}', [MahasiswaSertifikasiController::class, 'index'])
+        ->where('kategori', 'keahlian|pelatihan-seminar-workshop|prestasi-dan-penghargaan|pengalaman-organisasi')
+        ->name('kategori');
 });
 
-Route::get('/mahasiswa/pengesahan/print/{id}', [PengesahanController::class, 'print'])->name('mahasiswa.pengesahan.print');
+
+Route::prefix('mahasiswa/pengesahan')->name('mahasiswa.pengesahan.')->group(function () {
+    Route::get('/', [MahasiswaPengesahanController::class, 'index'])->name('index');
+    Route::get('/create', [MahasiswaPengesahanController::class, 'create'])->name('create');
+    Route::post('/', [MahasiswaPengesahanController::class, 'store'])->name('store');
+    Route::get('/{id}/edit', [MahasiswaPengesahanController::class, 'edit'])->name('edit');
+    Route::put('/{id}', [MahasiswaPengesahanController::class, 'update'])->name('update');
+    Route::delete('/{id}', [MahasiswaPengesahanController::class, 'destroy'])->name('destroy');
+});
+
+
+// ========== PRINT ROUTES ==========
+
+Route::get('/superadmin/pengesahan/print/{id}', [SA_PengesahanController::class, 'print'])
+    ->name('superadmin.pengesahan.print');
+
+Route::get('/fakultas/pengesahan/print/{id}', [FakultasPengesahanController::class, 'print'])
+    ->name('fakultas.pengesahan.print');
+
+Route::get('/prodi/pengesahan/print/{id}', [ProdiPengesahanController::class, 'print'])
+    ->name('prodi.pengesahan.print');
+
+Route::get('/mahasiswa/pengesahan/print/{id}', [MahasiswaPengesahanController::class, 'print'])
+    ->name('mahasiswa.pengesahan.print');
+
+// ========== FALLBACK 404 ==========
+Route::fallback(function () {
+    return redirect()->route('login')
+        ->withErrors(['login' => 'Halaman tidak ditemukan atau sesi berakhir.']);
+});

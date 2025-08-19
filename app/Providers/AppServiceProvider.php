@@ -63,11 +63,6 @@ class AppServiceProvider extends ServiceProvider
                     ['header' => 'Manajemen Akademik'],
                     [
                         'text' => 'Kelola CPL',
-                        'url'  => 'superadmin/cpl',
-                        'icon' => 'fas fa-tasks',
-                    ],
-                    [
-                        'text' => 'Kelola CPL Skor',
                         'url'  => 'superadmin/cpl-skor',
                         'icon' => 'fas fa-star-half-alt',
                     ],
@@ -191,11 +186,6 @@ class AppServiceProvider extends ServiceProvider
                     ['header' => 'Manajemen Akademik'],
                     [
                         'text' => 'Kelola CPL',
-                        'url'  => 'prodi/cpl',
-                        'icon' => 'fas fa-tasks',
-                    ],
-                    [
-                        'text' => 'Kelola CPL Skor',
                         'url'  => 'prodi/cpl-skor',
                         'icon' => 'fas fa-star-half-alt',
                     ],
@@ -210,11 +200,6 @@ class AppServiceProvider extends ServiceProvider
                         'text' => 'Kelola Pengajuan SKPI',
                         'url'  => 'prodi/pengajuan',
                         'icon' => 'fas fa-paper-plane',
-                    ],
-                    [
-                        'text' => 'Info Pengesahan',
-                        'url'  => 'prodi/pengesahan',
-                        'icon' => 'fas fa-stamp',
                     ],
                 );
             } else 
@@ -242,13 +227,6 @@ class AppServiceProvider extends ServiceProvider
                         'text' => 'Kelola Sertifikasi',
                         'url'  => 'mahasiswa/sertifikasi',
                         'icon' => 'fas fa-certificate',
-                    ],
-
-                    ['header' => 'SKPI'],
-                    [
-                        'text' => 'Kelola Pengajuan SKPI',
-                        'url'  => 'mahasiswa/pengajuan',
-                        'icon' => 'fas fa-paper-plane',
                     ],
                 );
             } else {

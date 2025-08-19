@@ -10,6 +10,12 @@
 @stop
 
 @section('content')
+@if(session('success'))
+<div class="alert alert-success">{{ session('success') }}</div>
+@endif
+@if($errors->any())
+<div class="alert alert-danger">{{ $errors->first() }}</div>
+@endif
 <div class="card">
     <div class="card-body">
         <form action="{{ route('superadmin.fakultas.update', $fakultas['id_fakultas']) }}" method="POST">

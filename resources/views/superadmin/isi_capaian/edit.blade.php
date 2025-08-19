@@ -6,6 +6,12 @@
     <h1>Edit Isi Capaian</h1>
 @stop
 @section('content')
+@if(session('success'))
+<div class="alert alert-success">{{ session('success') }}</div>
+@endif
+@if($errors->any())
+<div class="alert alert-danger">{{ $errors->first() }}</div>
+@endif
     <div class="card">
         <div class="card-body">
             <form action="{{ route('superadmin.isi_capaian.update', $isiCapaian['id_capaian']) }}" method="POST">
@@ -16,7 +22,7 @@
                     <select name="id_cpl_skor" class="form-control" required>
                         @foreach ($cplSkorList as $skor)
                             <option value="{{ $skor['id_cpl_skor'] }}" {{ $isiCapaian['id_cpl_skor'] == $skor['id_cpl_skor'] ? 'selected' : '' }}>
-                                {{ $skor['skor_cpl']. " " . $skor['mahasiswa']['nama_mahasiswa'] ?? '-' }}
+                                {{ $skor['skor_cpl']. " " .$skor["cpl"]["nama_cpl"]." - ". $skor['mahasiswa']['nama_mahasiswa'] ?? '-' }}
                             </option>
                         @endforeach
                     </select>

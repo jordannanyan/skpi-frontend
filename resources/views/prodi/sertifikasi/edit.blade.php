@@ -3,38 +3,102 @@
 @include('prodi.partials.header')
 
 @section('content_header')
-    <h1>Edit Sertifikasi</h1>
+<h1>Edit Sertifikasi</h1>
 @stop
+
+{{-- aktifkan plugin Select2 bawaan AdminLTE --}}
+@section('plugins.Select2', true)
+
 @section('content')
-    <form action="{{ route('prodi.sertifikasi.update', $sertifikasi['id_sertifikasi']) }}?_method=PUT" method="POST" enctype="multipart/form-data">
-        @csrf
-        <div class="card">
-            <div class="card-body">
-                <div class="form-group">
-                    <label>Mahasiswa</label>
-                    <select name="id_mahasiswa" class="form-control" required>
-                        <option value="">-- Pilih Mahasiswa --</option>
-                        @foreach($mahasiswa as $mhs)
-                            <option value="{{ $mhs['id_mahasiswa'] }}" {{ $mhs['id_mahasiswa'] == $sertifikasi['id_mahasiswa'] ? 'selected' : '' }}>{{ $mhs['nama_mahasiswa'] }}</option>
-                        @endforeach
-                    </select>
-                </div>
-                <div class="form-group">
-                    <label>Nama Sertifikasi</label>
-                    <input type="text" name="nama_sertifikasi" class="form-control" value="{{ $sertifikasi['nama_sertifikasi'] }}" required>
-                </div>
-                <div class="form-group">
-                    <label>Kategori Sertifikasi</label>
-                    <input type="text" name="kategori_sertifikasi" class="form-control" value="{{ $sertifikasi['kategori_sertifikasi'] }}" required>
-                </div>
-                <div class="form-group">
-                    <label>File Sertifikat</label><br>
-                    <small>Biarkan kosong jika tidak ingin mengubah.</small>
-                    <input type="file" name="file_sertifikat" class="form-control">
-                </div>
-                <button type="submit" class="btn btn-success">Simpan Perubahan</button>
-                <a href="{{ route('prodi.sertifikasi.index') }}" class="btn btn-secondary">Kembali</a>
+@if(session('success'))
+<div class="alert alert-success">{{ session('success') }}</div>
+@endif
+@if($errors->any())
+<div class="alert alert-danger">{{ $errors->first() }}</div>
+@endif
+<form action="{{ route('prodi.sertifikasi.update', $sertifikasi['id_sertifikasi']) }}?_method=PUT" method="POST" enctype="multipart/form-data">
+    @csrf
+    <div class="card">
+        <div class="card-body">
+
+            {{-- Mahasiswa (searchable) --}}
+            <div class="form-group">
+                <label>Mahasiswa</label>
+                @php $selectedId = (string) old('id_mahasiswa', $sertifikasi['id_mahasiswa'] ?? ''); @endphp
+                <select name="id_mahasiswa"
+                        class="form-control select2 select2bs4"
+                        data-placeholder="Cari mahasiswa (nama / NIM / prodi)"
+                        style="width: 100%;"
+                        required>
+                    <option value="">-- Pilih Mahasiswa --</option>
+                    @foreach($mahasiswa as $mhs)
+                        @php
+                            $nim  = $mhs['nim_mahasiswa'] ?? '-';
+                            $prodiName = data_get($mhs, 'prodi.nama_prodi');
+                            $label = trim(($mhs['nama_mahasiswa'] ?? '-') . ' — ' . $nim . ($prodiName ? " ({$prodiName})" : ''));
+                        @endphp
+                        <option value="{{ $mhs['id_mahasiswa'] }}"
+                            {{ (string)$mhs['id_mahasiswa'] === $selectedId ? 'selected' : '' }}>
+                            {{ $label }}
+                        </option>
+                    @endforeach
+                </select>
             </div>
+
+            <div class="form-group">
+                <label>Nama Sertifikasi</label>
+                <input type="text" name="nama_sertifikasi" class="form-control" value="{{ $sertifikasi['nama_sertifikasi'] }}" required>
+            </div>
+
+            <div class="form-group">
+                <label>Kategori Sertifikasi</label>
+                @php $oldCat = strtoupper(old('kategori_sertifikasi', $sertifikasi['kategori_sertifikasi'] ?? '')); @endphp
+                <select name="kategori_sertifikasi" class="form-control" required>
+                    <option value="">-- Pilih Kategori --</option>
+                    <option value="KEAHLIAN" {{ $oldCat === 'KEAHLIAN' ? 'selected' : '' }}>KEAHLIAN</option>
+                    <option value="PELATIHAN/SEMINAR/WORKSHOP" {{ $oldCat === 'PELATIHAN/SEMINAR/WORKSHOP' ? 'selected' : '' }}>
+                        PELATIHAN/SEMINAR/WORKSHOP
+                    </option>
+                    <option value="PRESTASI DAN PENGHARGAAN" {{ $oldCat === 'PRESTASI DAN PENGHARGAAN' ? 'selected' : '' }}>
+                        PRESTASI DAN PENGHARGAAN
+                    </option>
+                    <option value="PENGALAMAN ORGANISASI" {{ $oldCat === 'PENGALAMAN ORGANISASI' ? 'selected' : '' }}>
+                        PENGALAMAN ORGANISASI
+                    </option>
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label>File Sertifikat</label><br>
+                <small>Biarkan kosong jika tidak ingin mengubah.</small>
+                <input type="file" name="file_sertifikat" class="form-control">
+            </div>
+            <button type="submit" class="btn btn-success">Simpan Perubahan</button>
+            <a href="{{ route('prodi.sertifikasi.index') }}" class="btn btn-secondary">Kembali</a>
         </div>
-    </form>
+    </div>
+</form>
 @stop
+
+@section('js')
+<script>
+    $(function () {
+        $('.select2').select2({
+            theme: 'bootstrap4',
+            width: 'resolve',
+            allowClear: true,
+            placeholder: function(){
+                return $(this).data('placeholder') || 'Cari...';
+            },
+            // pencarian contains (bukan prefix)
+            matcher: function(params, data) {
+                if ($.trim(params.term) === '') { return data; }
+                if (typeof data.text === 'undefined') { return null; }
+                const term = params.term.toLowerCase();
+                const text = data.text.toLowerCase();
+                return text.indexOf(term) > -1 ? data : null;
+            }
+        });
+    });
+</script>
+@endsection

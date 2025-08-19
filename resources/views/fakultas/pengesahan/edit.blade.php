@@ -3,43 +3,61 @@
 @include('fakultas.partials.header')
 
 @section('content_header')
-    <h1>Edit Pengesahan</h1>
+<h1>Edit Pengesahan</h1>
 @stop
 @section('content')
-    <form action="{{ route('mahasiswa.pengesahan.update', $pengesahan['id_pengesahan']) }}" method="POST">
-        @csrf
-        @method('PUT')
-        <div class="card">
-            <div class="card-body">
-                <div class="form-group">
-                    <label>Fakultas</label>
-                    <select name="id_fakultas" class="form-control" required>
-                        <option value="">-- Pilih Fakultas --</option>
-                        @foreach($fakultas as $item)
-                            <option value="{{ $item['id_fakultas'] }}" {{ $item['id_fakultas'] == $pengesahan['id_fakultas'] ? 'selected' : '' }}>{{ $item['nama_fakultas'] }}</option>
-                        @endforeach
-                    </select>
-                </div>
-                <div class="form-group">
-                    <label>Pengajuan</label>
-                    <select name="id_pengajuan" class="form-control" required>
-                        <option value="">-- Pilih Pengajuan --</option>
-                        @foreach($pengajuan as $item)
-                            <option value="{{ $item['id_pengajuan'] }}" {{ $item['id_pengajuan'] == $pengesahan['id_pengajuan'] ? 'selected' : '' }}>{{ $item['mahasiswa']['nama_mahasiswa'] ?? '-' }}</option>
-                        @endforeach
-                    </select>
-                </div>
-                <div class="form-group">
-                    <label>Nomor Pengesahan</label>
-                    <input type="text" name="nomor_pengesahan" class="form-control" value="{{ $pengesahan['nomor_pengesahan'] }}" required>
-                </div>
-                <div class="form-group">
-                    <label>Tanggal Pengesahan</label>
-                    <input type="date" name="tgl_pengesahan" class="form-control" value="{{ $pengesahan['tgl_pengesahan'] }}" required>
-                </div>
-                <button class="btn btn-success">Simpan Perubahan</button>
-                <a href="{{ route('mahasiswa.pengesahan.index') }}" class="btn btn-secondary">Kembali</a>
+@if(session('success'))
+<div class="alert alert-success">{{ session('success') }}</div>
+@endif
+@if($errors->any())
+<div class="alert alert-danger">{{ $errors->first() }}</div>
+@endif
+<form action="{{ route('mahasiswa.pengesahan.update', $pengesahan['id_pengesahan']) }}" method="POST">
+    @csrf
+    @method('PUT')
+    <div class="card">
+        <div class="card-body">
+            <div class="form-group">
+                <label>Fakultas</label>
+                @php
+                $sessionFakultasId = session('id');
+                $sessionFakultasName = session('nama_fakultas');
+                // fallback cari nama dari koleksi $fakultas jika belum ada di session
+                if (!$sessionFakultasName && isset($fakultas)) {
+                $row = collect($fakultas)->firstWhere('id_fakultas', $sessionFakultasId);
+                $sessionFakultasName = $row['nama_fakultas'] ?? 'Fakultas';
+                }
+                @endphp
+
+                {{-- Dropdown dikunci agar tampilan tetap sama --}}
+                <select class="form-control" disabled>
+                    <option value="">{{ $sessionFakultasName ?? 'Fakultas' }}</option>
+                </select>
+
+                {{-- Nilai yang benar-benar dikirim ke server --}}
+                <input type="hidden" name="id_fakultas" value="{{ old('id_fakultas', $sessionFakultasId) }}">
             </div>
+
+            <div class="form-group">
+                <label>Pengajuan</label>
+                <select name="id_pengajuan" class="form-control" required>
+                    <option value="">-- Pilih Pengajuan --</option>
+                    @foreach($pengajuan as $item)
+                    <option value="{{ $item['id_pengajuan'] }}" {{ $item['id_pengajuan'] == $pengesahan['id_pengajuan'] ? 'selected' : '' }}>{{ $item['mahasiswa']['nama_mahasiswa'] ?? '-' }}</option>
+                    @endforeach
+                </select>
+            </div>
+            <div class="form-group">
+                <label>Nomor Pengesahan</label>
+                <input type="text" name="nomor_pengesahan" class="form-control" value="{{ $pengesahan['nomor_pengesahan'] }}" required>
+            </div>
+            <div class="form-group">
+                <label>Tanggal Pengesahan</label>
+                <input type="date" name="tgl_pengesahan" class="form-control" value="{{ $pengesahan['tgl_pengesahan'] }}" required>
+            </div>
+            <button class="btn btn-success">Simpan Perubahan</button>
+            <a href="{{ route('mahasiswa.pengesahan.index') }}" class="btn btn-secondary">Kembali</a>
         </div>
-    </form>
+    </div>
+</form>
 @stop

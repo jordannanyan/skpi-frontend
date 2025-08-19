@@ -6,6 +6,12 @@
     <h1>Tambah Isi Capaian</h1>
 @stop
 @section('content')
+@if(session('success'))
+<div class="alert alert-success">{{ session('success') }}</div>
+@endif
+@if($errors->any())
+<div class="alert alert-danger">{{ $errors->first() }}</div>
+@endif
     <div class="card">
         <div class="card-body">
             <form action="{{ route('prodi.isi_capaian.store') }}" method="POST">
