@@ -27,8 +27,6 @@
                 <tr>
                     <th>#</th>
                     <th>Nama Mahasiswa</th>
-                    <th>Kategori</th>
-                    <th>Status</th>
                     <th>Tanggal Pengajuan</th>
                     <th>Aksi</th>
                 </tr>
@@ -38,8 +36,6 @@
                 <tr>
                     <td>{{ $index + 1 }}</td>
                     <td>{{ $item['mahasiswa']['nama_mahasiswa'] ?? '-' }}</td>
-                    <td>{{ $item['kategori']['nama_kategori'] ?? '-' }}</td>
-                    <td>{{ $item['status'] }}</td>
                     <td>{{ $item['tgl_pengajuan'] }}</td>
                     <td>
                         <a href="{{ route('superadmin.pengajuan.edit', $item['id_pengajuan']) }}" class="btn btn-sm btn-warning">Edit</a>

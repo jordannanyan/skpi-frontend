@@ -45,6 +45,30 @@ class FakultasPengajuanController extends Controller
         return redirect()->route('fakultas.pengajuan.index')->with('success', 'Data pengajuan berhasil ditambahkan');
     }
 
+    public function show($id)
+    {
+        // jika butuh token: ->withToken(Session::get('token'))
+        $resp = Http::get("{$this->baseUrl}/{$id}");
+        if (!$resp->successful()) {
+            return redirect()->route('fakultas.pengajuan.index')
+                ->withErrors(['error' => 'Gagal memuat detail pengajuan']);
+        }
+
+        $pengajuan = $resp->json('data') ?? [];
+
+        // Ambil data Prodi berdasarkan id_prodi dari mahasiswa
+        $prodi = null;
+        $idProdi = data_get($pengajuan, 'mahasiswa.id_prodi');
+        if ($idProdi) {
+            $prodiResp = Http::get("http://127.0.0.1:8000/api/prodi/{$idProdi}");
+            if ($prodiResp->successful()) {
+                $prodi = $prodiResp->json('data');
+            }
+        }
+
+        return view('fakultas.pengajuan.show', compact('pengajuan', 'prodi'));
+    }
+
     public function edit($id)
     {
         $pengajuan = Http::get("{$this->baseUrl}/{$id}")->json('data');

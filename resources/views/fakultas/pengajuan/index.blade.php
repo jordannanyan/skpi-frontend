@@ -24,6 +24,7 @@
                     <th>#</th>
                     <th>Nama Mahasiswa</th>
                     <th>Tanggal Pengajuan</th>
+                    <th>Aksi</th>
                 </tr>
             </thead>
             <tbody>
@@ -32,6 +33,11 @@
                     <td>{{ $index + 1 }}</td>
                     <td>{{ $item['mahasiswa']['nama_mahasiswa'] ?? '-' }}</td>
                     <td>{{ $item['tgl_pengajuan'] }}</td>
+                      <td>
+                        <a href="{{ route('fakultas.pengajuan.show', $item['id_pengajuan']) }}" class="btn btn-sm btn-info">
+                            <i class="fas fa-eye"></i> Detail
+                        </a>
+                    </td>
                 </tr>
                 @endforeach
             </tbody>

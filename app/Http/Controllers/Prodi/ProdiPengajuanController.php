@@ -30,6 +30,21 @@ class ProdiPengajuanController extends Controller
 
         return view('prodi.pengajuan.create', compact('mahasiswa', 'kategori'));
     }
+    public function show($id)
+    {
+        // Jika API kamu butuh token, ganti Http::get(...) jadi:
+        // $resp = Http::withToken(Session::get('token'))->get("{$this->baseUrl}/{$id}");
+        $resp = Http::get("{$this->baseUrl}/{$id}");
+
+        if (!$resp->successful()) {
+            return redirect()->route('prodi.pengajuan.index')
+                ->withErrors(['error' => 'Gagal memuat detail pengajuan']);
+        }
+
+        $pengajuan = $resp->json('data') ?? [];
+
+        return view('prodi.pengajuan.show', compact('pengajuan'));
+    }
 
     public function store(Request $request)
     {

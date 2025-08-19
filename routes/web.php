@@ -326,6 +326,7 @@ Route::prefix('fakultas/kategori')->name('fakultas.kategori.')->group(function (
 
 Route::prefix('fakultas/pengajuan')->name('fakultas.pengajuan.')->group(function () {
     Route::get('/', [FakultasPengajuanController::class, 'index'])->name('index');
+    Route::get('/{id}/detail', [FakultasPengajuanController::class, 'show'])->name('show');
     Route::get('/create', [FakultasPengajuanController::class, 'create'])->name('create');
     Route::post('/', [FakultasPengajuanController::class, 'store'])->name('store');
     Route::get('/{id}/edit', [FakultasPengajuanController::class, 'edit'])->name('edit');
@@ -419,6 +420,7 @@ Route::prefix('prodi/kategori')->name('prodi.kategori.')->group(function () {
 
 Route::prefix('prodi/pengajuan')->name('prodi.pengajuan.')->group(function () {
     Route::get('/', [ProdiPengajuanController::class, 'index'])->name('index');
+    Route::get('/{id}/detail', [ProdiPengajuanController::class, 'show'])->name('show');
     Route::get('/create', [ProdiPengajuanController::class, 'create'])->name('create');
     Route::post('/', [ProdiPengajuanController::class, 'store'])->name('store');
     Route::get('/{id}/edit', [ProdiPengajuanController::class, 'edit'])->name('edit');
