@@ -133,6 +133,36 @@ if ($token && $mhsId) {
 </div>
 
 <div class="row">
+    {{-- Document Requirement Warning --}}
+    @if($totalDokumen < 1)
+    <div class="col-md-12">
+        <div class="alert alert-warning">
+            <h5><i class="icon fas fa-exclamation-triangle"></i> Dokumen Pendukung Belum Lengkap</h5>
+            <p>Anda belum mengunggah dokumen pendukung SKPI. Program Studi memerlukan minimal satu dokumen untuk dapat membuat pengajuan SKPI.</p>
+            <p><strong>Dokumen yang dapat diunggah:</strong></p>
+            <ul>
+                <li>Sertifikasi/Prestasi ({{ $jumlahSertifikasi }} dokumen)</li>
+                <li>Kerja Praktek ({{ $jumlahKerjaPraktek }} dokumen)</li>
+                <li>Tugas Akhir ({{ $jumlahTugasAkhir }} dokumen)</li>
+            </ul>
+            <p><small class="text-muted">Harap lengkapi dokumen-dokumen tersebut agar Program Studi dapat memproses pengajuan SKPI Anda.</small></p>
+            <div class="mt-2">
+                <a href="{{ route('mahasiswa.sertifikasi.index') }}" class="btn btn-info mr-2">
+                    <i class="fas fa-certificate"></i> Upload Sertifikasi
+                </a>
+                <a href="{{ route('mahasiswa.kerja-praktek.index') }}" class="btn btn-success mr-2">
+                    <i class="fas fa-briefcase"></i> Upload Kerja Praktek
+                </a>
+                <a href="{{ route('mahasiswa.tugas-akhir.index') }}" class="btn btn-warning">
+                    <i class="fas fa-graduation-cap"></i> Upload Tugas Akhir
+                </a>
+            </div>
+        </div>
+    </div>
+    @endif
+</div>
+
+<div class="row">
     {{-- Status Pengajuan SKPI --}}
     @if(!$pengajuan)
         <div class="col-md-12">
