@@ -5,25 +5,45 @@ namespace App\Http\Controllers\Fakultas;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Session;
 
 class FakultasTugasAkhirController extends Controller
 {
-    protected $baseUrl;
+    protected string $baseUrl;
 
     public function __construct()
     {
         $this->baseUrl = 'http://127.0.0.1:8000/api';
     }
 
+    /** Ambil id_fakultas dari session->id saat role=fakultas */
+    private function getFakultasId(): ?int
+    {
+        if (Session::get('role') !== 'fakultas') return null;
+        $id = Session::get('id'); // diset saat login sebagai id_fakultas
+        return is_numeric($id) ? (int) $id : null;
+    }
+
     public function index()
     {
+        $token      = Session::get('token');
+        $fakultasId = $this->getFakultasId();
+        if (!$fakultasId) return back()->with('error', 'ID Fakultas tidak ditemukan di sesi.');
+
         try {
-            $response = Http::get($this->baseUrl . '/tugas-akhir');
+            $response = Http::withToken($token)->get($this->baseUrl . '/tugas-akhir', [
+                'id_fakultas' => $fakultasId, // /tugas-akhir?id_fakultas=...
+            ]);
+
+            if ($response->status() === 401) {
+                return redirect()->route('login')->withErrors(['login' => 'Sesi berakhir, silakan login ulang.']);
+            }
+
             if ($response->successful()) {
-                $data = $response->json('data');
+                $data = $response->json('data') ?? [];
                 return view('fakultas.tugas_akhir.index', compact('data'));
             }
-            return back()->with('error', 'Gagal mengambil data tugas akhir');
+            return back()->with('error', $response->json('message') ?? 'Gagal mengambil data tugas akhir');
         } catch (\Exception $e) {
             return back()->with('error', $e->getMessage());
         }
@@ -31,8 +51,24 @@ class FakultasTugasAkhirController extends Controller
 
     public function create()
     {
+        $token      = Session::get('token');
+        $fakultasId = $this->getFakultasId();
+        if (!$fakultasId) return back()->with('error', 'ID Fakultas tidak ditemukan di sesi.');
+
         try {
-            $mahasiswa = Http::get('http://127.0.0.1:8000/api' . '/mahasiswa')->json('data');
+            // Ambil mahasiswa di bawah fakultas ini
+            $mhsResp = Http::withToken($token)->get($this->baseUrl . '/mahasiswa', [
+                'id_fakultas' => $fakultasId,
+            ]);
+
+            if ($mhsResp->status() === 401) {
+                return redirect()->route('login')->withErrors(['login' => 'Sesi berakhir, silakan login ulang.']);
+            }
+            if (!$mhsResp->successful()) {
+                return back()->with('error', 'Gagal mengambil data mahasiswa');
+            }
+
+            $mahasiswa = $mhsResp->json('data') ?? [];
             return view('fakultas.tugas_akhir.create', compact('mahasiswa'));
         } catch (\Exception $e) {
             return back()->with('error', $e->getMessage());
@@ -41,52 +77,44 @@ class FakultasTugasAkhirController extends Controller
 
     public function store(Request $request)
     {
+        $token      = Session::get('token');
+        $fakultasId = $this->getFakultasId();
+        if (!$fakultasId) return back()->with('error', 'ID Fakultas tidak ditemukan di sesi.');
+
         $validated = $request->validate([
-            'id_mahasiswa' => 'required',
-            'kategori' => 'required|string',
-            'judul' => 'required|string',
-            'file_halaman_dpn' => 'nullable|file|mimes:pdf,jpg,jpeg,png|max:2048',
-            'file_lembar_pengesahan' => 'nullable|file|mimes:pdf,jpg,jpeg,png|max:2048'
+            'id_mahasiswa'           => 'required',
+            'kategori'               => 'required|string',
+            'judul'                  => 'required|string',
+            'file_halaman_dpn'       => 'nullable|file|mimes:pdf,jpg,jpeg,png|max:2048',
+            'file_lembar_pengesahan' => 'nullable|file|mimes:pdf,jpg,jpeg,png|max:2048',
         ]);
 
         try {
-            $multipart = [
-                [
-                    'name' => 'id_mahasiswa',
-                    'contents' => $validated['id_mahasiswa'],
-                ],
-                [
-                    'name' => 'kategori',
-                    'contents' => $validated['kategori'],
-                ],
-                [
-                    'name' => 'judul',
-                    'contents' => $validated['judul'],
-                ],
-            ];
+            $req = Http::withToken($token)->asMultipart();
 
             if ($request->hasFile('file_halaman_dpn')) {
-                $multipart[] = [
-                    'name' => 'file_halaman_dpn',
-                    'contents' => fopen($request->file('file_halaman_dpn')->getPathname(), 'r'),
-                    'filename' => $request->file('file_halaman_dpn')->getClientOriginalName(),
-                ];
+                $file = $request->file('file_halaman_dpn');
+                $req  = $req->attach('file_halaman_dpn', fopen($file->getPathname(), 'r'), $file->getClientOriginalName());
             }
-
             if ($request->hasFile('file_lembar_pengesahan')) {
-                $multipart[] = [
-                    'name' => 'file_lembar_pengesahan',
-                    'contents' => fopen($request->file('file_lembar_pengesahan')->getPathname(), 'r'),
-                    'filename' => $request->file('file_lembar_pengesahan')->getClientOriginalName(),
-                ];
+                $file = $request->file('file_lembar_pengesahan');
+                $req  = $req->attach('file_lembar_pengesahan', fopen($file->getPathname(), 'r'), $file->getClientOriginalName());
             }
 
-            $response = Http::attach($multipart)->post($this->baseUrl . '/tugas-akhir', []);
+            $response = $req->post($this->baseUrl . '/tugas-akhir', [
+                'id_mahasiswa' => $validated['id_mahasiswa'],
+                'kategori'     => $validated['kategori'],
+                'judul'        => $validated['judul'],
+                'id_fakultas'  => $fakultasId, // inject id_fakultas
+            ]);
 
+            if ($response->status() === 401) {
+                return redirect()->route('login')->withErrors(['login' => 'Sesi berakhir, silakan login ulang.']);
+            }
             if ($response->successful()) {
                 return redirect()->route('fakultas.tugas_akhir.index')->with('success', 'Tugas akhir berhasil ditambahkan');
             }
-            return back()->with('error', 'Gagal menambahkan tugas akhir');
+            return back()->with('error', $response->json('message') ?? 'Gagal menambahkan tugas akhir');
         } catch (\Exception $e) {
             return back()->with('error', $e->getMessage());
         }
@@ -94,9 +122,27 @@ class FakultasTugasAkhirController extends Controller
 
     public function edit($id)
     {
+        $token      = Session::get('token');
+        $fakultasId = $this->getFakultasId();
+        if (!$fakultasId) return back()->with('error', 'ID Fakultas tidak ditemukan di sesi.');
+
         try {
-            $ta = Http::get("{$this->baseUrl}/tugas-akhir/{$id}")->json('data');
-            $mahasiswa = Http::get('http://127.0.0.1:8000/api' . '/mahasiswa')->json('data');
+            $taResp = Http::withToken($token)->get("{$this->baseUrl}/tugas-akhir/{$id}", [
+                'id_fakultas' => $fakultasId,
+            ]);
+            $mhsResp = Http::withToken($token)->get($this->baseUrl . '/mahasiswa', [
+                'id_fakultas' => $fakultasId,
+            ]);
+
+            if ($taResp->status() === 401 || $mhsResp->status() === 401) {
+                return redirect()->route('login')->withErrors(['login' => 'Sesi berakhir, silakan login ulang.']);
+            }
+            if (!$taResp->successful() || !$mhsResp->successful()) {
+                return back()->with('error', 'Gagal mengambil data tugas akhir atau mahasiswa');
+            }
+
+            $ta        = $taResp->json('data') ?? [];
+            $mahasiswa = $mhsResp->json('data') ?? [];
             return view('fakultas.tugas_akhir.edit', compact('ta', 'mahasiswa'));
         } catch (\Exception $e) {
             return back()->with('error', $e->getMessage());
@@ -105,56 +151,45 @@ class FakultasTugasAkhirController extends Controller
 
     public function update(Request $request, $id)
     {
+        $token      = Session::get('token');
+        $fakultasId = $this->getFakultasId();
+        if (!$fakultasId) return back()->with('error', 'ID Fakultas tidak ditemukan di sesi.');
+
         $validated = $request->validate([
-            'id_mahasiswa' => 'required',
-            'kategori' => 'required|string',
-            'judul' => 'required|string',
-            'file_halaman_dpn' => 'nullable|file|mimes:pdf,jpg,jpeg,png|max:2048',
-            'file_lembar_pengesahan' => 'nullable|file|mimes:pdf,jpg,jpeg,png|max:2048'
+            'id_mahasiswa'           => 'required',
+            'kategori'               => 'required|string',
+            'judul'                  => 'required|string',
+            'file_halaman_dpn'       => 'nullable|file|mimes:pdf,jpg,jpeg,png|max:2048',
+            'file_lembar_pengesahan' => 'nullable|file|mimes:pdf,jpg,jpeg,png|max:2048',
         ]);
 
         try {
-            $multipart = [
-                [
-                    'name' => 'id_mahasiswa',
-                    'contents' => $validated['id_mahasiswa'],
-                ],
-                [
-                    'name' => 'kategori',
-                    'contents' => $validated['kategori'],
-                ],
-                [
-                    'name' => 'judul',
-                    'contents' => $validated['judul'],
-                ],
-                [
-                    'name' => '_method',
-                    'contents' => 'PUT',
-                ]
-            ];
+            $req = Http::withToken($token)->asMultipart();
 
             if ($request->hasFile('file_halaman_dpn')) {
-                $multipart[] = [
-                    'name' => 'file_halaman_dpn',
-                    'contents' => fopen($request->file('file_halaman_dpn')->getPathname(), 'r'),
-                    'filename' => $request->file('file_halaman_dpn')->getClientOriginalName(),
-                ];
+                $file = $request->file('file_halaman_dpn');
+                $req  = $req->attach('file_halaman_dpn', fopen($file->getPathname(), 'r'), $file->getClientOriginalName());
             }
-
             if ($request->hasFile('file_lembar_pengesahan')) {
-                $multipart[] = [
-                    'name' => 'file_lembar_pengesahan',
-                    'contents' => fopen($request->file('file_lembar_pengesahan')->getPathname(), 'r'),
-                    'filename' => $request->file('file_lembar_pengesahan')->getClientOriginalName(),
-                ];
+                $file = $request->file('file_lembar_pengesahan');
+                $req  = $req->attach('file_lembar_pengesahan', fopen($file->getPathname(), 'r'), $file->getClientOriginalName());
             }
 
-            $response = Http::attach($multipart)->post("{$this->baseUrl}/tugas-akhir/{$id}", []);
+            $response = $req->post("{$this->baseUrl}/tugas-akhir/{$id}", [
+                '_method'      => 'PUT',
+                'id_mahasiswa' => $validated['id_mahasiswa'],
+                'kategori'     => $validated['kategori'],
+                'judul'        => $validated['judul'],
+                'id_fakultas'  => $fakultasId, // inject id_fakultas
+            ]);
 
+            if ($response->status() === 401) {
+                return redirect()->route('login')->withErrors(['login' => 'Sesi berakhir, silakan login ulang.']);
+            }
             if ($response->successful()) {
                 return redirect()->route('fakultas.tugas_akhir.index')->with('success', 'Tugas akhir berhasil diperbarui');
             }
-            return back()->with('error', 'Gagal memperbarui tugas akhir');
+            return back()->with('error', $response->json('message') ?? 'Gagal memperbarui tugas akhir');
         } catch (\Exception $e) {
             return back()->with('error', $e->getMessage());
         }
@@ -162,12 +197,24 @@ class FakultasTugasAkhirController extends Controller
 
     public function destroy($id)
     {
+        $token      = Session::get('token');
+        $fakultasId = $this->getFakultasId();
+        if (!$fakultasId) return back()->with('error', 'ID Fakultas tidak ditemukan di sesi.');
+
         try {
-            $response = Http::delete("{$this->baseUrl}/tugas-akhir/{$id}");
+            // Gunakan method override agar id_fakultas bisa dikirim di body
+            $response = Http::withToken($token)->asForm()->post("{$this->baseUrl}/tugas-akhir/{$id}", [
+                '_method'     => 'DELETE',
+                'id_fakultas' => $fakultasId,
+            ]);
+
+            if ($response->status() === 401) {
+                return redirect()->route('login')->withErrors(['login' => 'Sesi berakhir, silakan login ulang.']);
+            }
             if ($response->successful()) {
                 return redirect()->route('fakultas.tugas_akhir.index')->with('success', 'Tugas akhir berhasil dihapus');
             }
-            return back()->with('error', 'Gagal menghapus tugas akhir');
+            return back()->with('error', $response->json('message') ?? 'Gagal menghapus tugas akhir');
         } catch (\Exception $e) {
             return back()->with('error', $e->getMessage());
         }

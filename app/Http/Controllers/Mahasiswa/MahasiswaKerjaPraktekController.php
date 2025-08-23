@@ -9,70 +9,93 @@ use Illuminate\Http\Request;
 
 class MahasiswaKerjaPraktekController extends Controller
 {
-    private $baseUrl;
+    private string $baseUrl;
 
     public function __construct()
     {
         $this->baseUrl = 'http://127.0.0.1:8000/api';
     }
 
+    /** Get id_mahasiswa from session->id when role=mahasiswa */
+    private function getMahasiswaId(): ?int
+    {
+        if (Session::get('role') !== 'mahasiswa') return null;
+        $id = Session::get('id'); // set at login for role=mahasiswa as id_mahasiswa
+        return is_numeric($id) ? (int) $id : null;
+    }
+
     public function index()
     {
         $token = Session::get('token');
+        $mhsId = $this->getMahasiswaId();
+        if (!$mhsId) return back()->withErrors(['error' => 'ID Mahasiswa tidak ditemukan di sesi.']);
 
-        $response = Http::withToken($token)->get("{$this->baseUrl}/kerja-praktek");
+        $response = Http::withToken($token)->get("{$this->baseUrl}/kerja-praktek", [
+            'id_mahasiswa' => $mhsId, // => /kerja-praktek?id_mahasiswa=XYZ
+        ]);
+
+        if ($response->status() === 401) {
+            return redirect()->route('login')->withErrors(['login' => 'Sesi berakhir, silakan login ulang.']);
+        }
 
         if ($response->successful()) {
-            $data = $response->json()['data'];
+            $data = $response->json('data') ?? [];
             return view('mahasiswa.kerja_praktek.index', compact('data'));
-        } else {
-            return back()->withErrors(['error' => 'Gagal mengambil data kerja praktek']);
         }
+
+        return back()->withErrors(['error' => $response->json('message') ?? 'Gagal mengambil data kerja praktek']);
     }
 
     public function create()
     {
         $token = Session::get('token');
-        $mahasiswa = Http::withToken($token)->get("{$this->baseUrl}/mahasiswa")->json('data');
+        $mhsId = $this->getMahasiswaId();
+        if (!$mhsId) return back()->withErrors(['error' => 'ID Mahasiswa tidak ditemukan di sesi.']);
+
+        // (Opsional) jika view butuh data mahasiswa, ambil profil diri sendiri
+        $mhsResp = Http::withToken($token)->get("{$this->baseUrl}/mahasiswa/{$mhsId}");
+        if ($mhsResp->status() === 401) {
+            return redirect()->route('login')->withErrors(['login' => 'Sesi berakhir, silakan login ulang.']);
+        }
+        $mahasiswa = $mhsResp->successful() ? [$mhsResp->json('data')] : [];
+
         return view('mahasiswa.kerja_praktek.create', compact('mahasiswa'));
     }
 
     public function store(Request $request)
     {
+        $token = Session::get('token');
+        $mhsId = $this->getMahasiswaId();
+        if (!$mhsId) return back()->withErrors(['error' => 'ID Mahasiswa tidak ditemukan di sesi.']);
+
+        // id_mahasiswa diambil dari session (bukan dari form)
         $validated = $request->validate([
-            'id_mahasiswa' => 'required',
-            'nama_kegiatan' => 'required|string',
+            'nama_kegiatan'   => 'required|string',
             'file_sertifikat' => 'nullable|file|mimes:pdf,jpg,jpeg,png|max:2048',
         ]);
 
         try {
-            $multipart = [
-                [
-                    'name' => 'id_mahasiswa',
-                    'contents' => $validated['id_mahasiswa'],
-                ],
-                [
-                    'name' => 'nama_kegiatan',
-                    'contents' => $validated['nama_kegiatan'],
-                ],
-            ];
+            $req = Http::withToken($token)->asMultipart();
 
             if ($request->hasFile('file_sertifikat')) {
-                $multipart[] = [
-                    'name' => 'file_sertifikat',
-                    'contents' => fopen($request->file('file_sertifikat')->getPathname(), 'r'),
-                    'filename' => $request->file('file_sertifikat')->getClientOriginalName(),
-                ];
+                $file = $request->file('file_sertifikat');
+                $req  = $req->attach('file_sertifikat', fopen($file->getPathname(), 'r'), $file->getClientOriginalName());
             }
 
-            $token = Session::get('token');
-            $response = Http::withToken($token)->attach($multipart)->post("{$this->baseUrl}/kerja-praktek", []);
+            $response = $req->post("{$this->baseUrl}/kerja-praktek", [
+                'id_mahasiswa'  => $mhsId,
+                'nama_kegiatan' => $validated['nama_kegiatan'],
+            ]);
+
+            if ($response->status() === 401) {
+                return redirect()->route('login')->withErrors(['login' => 'Sesi berakhir, silakan login ulang.']);
+            }
 
             if ($response->successful()) {
                 return redirect()->route('mahasiswa.kerja_praktek.index')->with('success', 'Data kerja praktek berhasil ditambahkan');
-            } else {
-                return back()->withErrors(['error' => 'Gagal menambahkan kerja praktek']);
             }
+
+            return back()->withErrors(['error' => $response->json('message') ?? 'Gagal menambahkan kerja praktek']);
         } catch (\Exception $e) {
             return back()->withErrors(['error' => 'Terjadi kesalahan: ' . $e->getMessage()]);
         }
@@ -81,57 +104,62 @@ class MahasiswaKerjaPraktekController extends Controller
     public function edit($id)
     {
         $token = Session::get('token');
-        $mahasiswa = Http::withToken($token)->get("{$this->baseUrl}/mahasiswa")->json('data');
-        $response = Http::withToken($token)->get("{$this->baseUrl}/kerja-praktek/{$id}");
+        $mhsId = $this->getMahasiswaId();
+        if (!$mhsId) return back()->withErrors(['error' => 'ID Mahasiswa tidak ditemukan di sesi.']);
+
+        // (Opsional) kirim data mahasiswa sendiri ke view jika diperlukan
+        $mhsResp = Http::withToken($token)->get("{$this->baseUrl}/mahasiswa/{$mhsId}");
+        $response = Http::withToken($token)->get("{$this->baseUrl}/kerja-praktek/{$id}", [
+            'id_mahasiswa' => $mhsId,
+        ]);
+
+        if ($mhsResp->status() === 401 || $response->status() === 401) {
+            return redirect()->route('login')->withErrors(['login' => 'Sesi berakhir, silakan login ulang.']);
+        }
 
         if ($response->successful()) {
-            $kerja_praktek = $response->json('data');
+            $kerja_praktek = $response->json('data') ?? [];
+            $mahasiswa     = $mhsResp->successful() ? [$mhsResp->json('data')] : [];
             return view('mahasiswa.kerja_praktek.edit', compact('kerja_praktek', 'mahasiswa'));
-        } else {
-            return back()->withErrors(['error' => 'Gagal mengambil data kerja praktek']);
         }
+
+        return back()->withErrors(['error' => 'Gagal mengambil data kerja praktek']);
     }
 
     public function update(Request $request, $id)
     {
+        $token = Session::get('token');
+        $mhsId = $this->getMahasiswaId();
+        if (!$mhsId) return back()->withErrors(['error' => 'ID Mahasiswa tidak ditemukan di sesi.']);
+
         $validated = $request->validate([
-            'id_mahasiswa' => 'required',
-            'nama_kegiatan' => 'required|string',
+            'nama_kegiatan'   => 'required|string',
             'file_sertifikat' => 'nullable|file|mimes:pdf,jpg,jpeg,png|max:2048',
         ]);
 
         try {
-            $multipart = [
-                [
-                    'name' => 'id_mahasiswa',
-                    'contents' => $validated['id_mahasiswa'],
-                ],
-                [
-                    'name' => 'nama_kegiatan',
-                    'contents' => $validated['nama_kegiatan'],
-                ],
-                [
-                    'name' => '_method',
-                    'contents' => 'PUT',
-                ]
-            ];
+            $req = Http::withToken($token)->asMultipart();
 
             if ($request->hasFile('file_sertifikat')) {
-                $multipart[] = [
-                    'name' => 'file_sertifikat',
-                    'contents' => fopen($request->file('file_sertifikat')->getPathname(), 'r'),
-                    'filename' => $request->file('file_sertifikat')->getClientOriginalName(),
-                ];
+                $file = $request->file('file_sertifikat');
+                $req  = $req->attach('file_sertifikat', fopen($file->getPathname(), 'r'), $file->getClientOriginalName());
             }
 
-            $token = Session::get('token');
-            $response = Http::withToken($token)->attach($multipart)->post("{$this->baseUrl}/kerja-praktek/{$id}", []);
+            $response = $req->post("{$this->baseUrl}/kerja-praktek/{$id}", [
+                '_method'       => 'PUT',
+                'id_mahasiswa'  => $mhsId,
+                'nama_kegiatan' => $validated['nama_kegiatan'],
+            ]);
+
+            if ($response->status() === 401) {
+                return redirect()->route('login')->withErrors(['login' => 'Sesi berakhir, silakan login ulang.']);
+            }
 
             if ($response->successful()) {
                 return redirect()->route('mahasiswa.kerja_praktek.index')->with('success', 'Data kerja praktek berhasil diperbarui');
-            } else {
-                return back()->withErrors(['error' => 'Gagal memperbarui kerja praktek']);
             }
+
+            return back()->withErrors(['error' => $response->json('message') ?? 'Gagal memperbarui kerja praktek']);
         } catch (\Exception $e) {
             return back()->withErrors(['error' => 'Terjadi kesalahan: ' . $e->getMessage()]);
         }
@@ -140,16 +168,25 @@ class MahasiswaKerjaPraktekController extends Controller
     public function destroy($id)
     {
         $token = Session::get('token');
+        $mhsId = $this->getMahasiswaId();
+        if (!$mhsId) return back()->withErrors(['error' => 'ID Mahasiswa tidak ditemukan di sesi.']);
 
         try {
-            $response = Http::withToken($token)
-                ->post("{$this->baseUrl}/kerja-praktek/{$id}?_method=DELETE");
+            // Override method so backend can receive id_mahasiswa in body
+            $response = Http::withToken($token)->asForm()->post("{$this->baseUrl}/kerja-praktek/{$id}", [
+                '_method'      => 'DELETE',
+                'id_mahasiswa' => $mhsId,
+            ]);
+
+            if ($response->status() === 401) {
+                return redirect()->route('login')->withErrors(['login' => 'Sesi berakhir, silakan login ulang.']);
+            }
 
             if ($response->successful()) {
                 return redirect()->route('mahasiswa.kerja_praktek.index')->with('success', 'Data kerja praktek berhasil dihapus');
-            } else {
-                return back()->withErrors(['error' => 'Gagal menghapus kerja praktek']);
             }
+
+            return back()->withErrors(['error' => $response->json('message') ?? 'Gagal menghapus kerja praktek']);
         } catch (\Exception $e) {
             return back()->withErrors(['error' => 'Terjadi kesalahan: ' . $e->getMessage()]);
         }

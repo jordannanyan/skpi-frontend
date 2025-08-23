@@ -16,22 +16,33 @@ class ProdiMahasiswaController extends Controller
         $this->baseUrl = 'http://127.0.0.1:8000/api';
     }
 
+    /** Get id_prodi from session->id (set at login for role=prodi) */
+    private function getProdiId(): ?int
+    {
+        if (Session::get('role') !== 'prodi') return null;
+        $id = Session::get('id'); // this is id_prodi for role=prodi
+        return is_numeric($id) ? (int) $id : null;
+    }
+
     public function index()
     {
-        $token = Session::get('token');
+        $token   = Session::get('token');
+        $prodiId = $this->getProdiId();
+        if (!$prodiId) return back()->withErrors(['error' => 'ID Prodi tidak ditemukan di sesi.']);
 
         try {
-            $response = Http::withToken($token)->get("{$this->baseUrl}/mahasiswa");
+            // => GET /mahasiswa?id_prodi=1
+            $response = Http::withToken($token)->get("{$this->baseUrl}/mahasiswa", [
+                'id_prodi' => $prodiId
+            ]);
 
             if ($response->successful()) {
                 $data = $response->json('data');
                 return view('prodi.mahasiswa.index', compact('data'));
             }
-
             if ($response->status() === 401) {
                 return redirect()->route('login')->withErrors(['login' => 'Sesi berakhir, silakan login ulang.']);
             }
-
             return back()->withErrors(['error' => $response->json('message') ?? 'Gagal mengambil data mahasiswa']);
         } catch (\Exception $e) {
             return back()->withErrors(['error' => 'Terjadi kesalahan: ' . $e->getMessage()]);
@@ -43,6 +54,7 @@ class ProdiMahasiswaController extends Controller
         $token = Session::get('token');
 
         try {
+            // opsional: kalau form tidak butuh dropdown prodi, ini bisa dihapus
             $response = Http::withToken($token)->get("{$this->baseUrl}/prodi");
             $prodiList = $response->successful() ? ($response->json('data') ?? []) : [];
 
@@ -58,12 +70,13 @@ class ProdiMahasiswaController extends Controller
 
     public function store(Request $request)
     {
-        $token = Session::get('token');
+        $token   = Session::get('token');
+        $prodiId = $this->getProdiId();
+        if (!$prodiId) return back()->withInput()->withErrors(['error' => 'ID Prodi tidak ditemukan di sesi.']);
 
         $validated = $request->validate([
             'nim_mahasiswa'   => 'required|string|max:50',
             'nama_mahasiswa'  => 'required|string|max:255',
-            'id_prodi'        => 'required|integer',
             'username'        => 'required|string|max:100',
             'password'        => 'required|string|min:6',
             'tgl_masuk'       => 'required|date_format:Y-m-d',
@@ -73,22 +86,18 @@ class ProdiMahasiswaController extends Controller
             'alamat'          => 'nullable|string|max:255',
         ]);
 
+        $payload = $validated + ['id_prodi' => $prodiId];
+
         try {
-            $response = Http::withToken($token)
-                ->post("{$this->baseUrl}/mahasiswa", $validated);
+            $response = Http::withToken($token)->post("{$this->baseUrl}/mahasiswa", $payload);
 
             if ($response->successful()) {
-                return redirect()->route('prodi.mahasiswa.index')
-                    ->with('success', 'Data mahasiswa berhasil ditambahkan');
+                return redirect()->route('prodi.mahasiswa.index')->with('success', 'Data mahasiswa berhasil ditambahkan');
             }
-
             if ($response->status() === 401) {
                 return redirect()->route('login')->withErrors(['login' => 'Sesi berakhir, silakan login ulang.']);
             }
-
-            return back()
-                ->withInput()
-                ->withErrors(['error' => $response->json('message') ?? 'Gagal menambahkan data mahasiswa']);
+            return back()->withInput()->withErrors(['error' => $response->json('message') ?? 'Gagal menambahkan data mahasiswa']);
         } catch (\Exception $e) {
             return back()->withInput()->withErrors(['error' => 'Terjadi kesalahan: ' . $e->getMessage()]);
         }
@@ -111,7 +120,6 @@ class ProdiMahasiswaController extends Controller
             if ($mahasiswaResponse->status() === 401 || $prodiResponse->status() === 401) {
                 return redirect()->route('login')->withErrors(['login' => 'Sesi berakhir, silakan login ulang.']);
             }
-
             return back()->withErrors(['error' => 'Gagal mengambil data mahasiswa atau prodi']);
         } catch (\Exception $e) {
             return back()->withErrors(['error' => 'Terjadi kesalahan: ' . $e->getMessage()]);
@@ -120,12 +128,13 @@ class ProdiMahasiswaController extends Controller
 
     public function update(Request $request, $id)
     {
-        $token = Session::get('token');
+        $token   = Session::get('token');
+        $prodiId = $this->getProdiId();
+        if (!$prodiId) return back()->withInput()->withErrors(['error' => 'ID Prodi tidak ditemukan di sesi.']);
 
         $validated = $request->validate([
             'nim_mahasiswa'   => 'required|string|max:50',
             'nama_mahasiswa'  => 'required|string|max:255',
-            'id_prodi'        => 'required|integer',
             'username'        => 'required|string|max:100',
             'password'        => 'nullable|string|min:6',
             'tgl_masuk'       => 'required|date_format:Y-m-d',
@@ -136,25 +145,21 @@ class ProdiMahasiswaController extends Controller
         ]);
 
         if (empty($validated['password'])) {
-            unset($validated['password']); // jangan kirim kalau tidak diganti
+            unset($validated['password']);
         }
 
+        $payload = $validated + ['id_prodi' => $prodiId];
+
         try {
-            $response = Http::withToken($token)
-                ->post("{$this->baseUrl}/mahasiswa/{$id}?_method=PUT", $validated);
+            $response = Http::withToken($token)->post("{$this->baseUrl}/mahasiswa/{$id}?_method=PUT", $payload);
 
             if ($response->successful()) {
-                return redirect()->route('prodi.mahasiswa.index')
-                    ->with('success', 'Data mahasiswa berhasil diperbarui');
+                return redirect()->route('prodi.mahasiswa.index')->with('success', 'Data mahasiswa berhasil diperbarui');
             }
-
             if ($response->status() === 401) {
                 return redirect()->route('login')->withErrors(['login' => 'Sesi berakhir, silakan login ulang.']);
             }
-
-            return back()
-                ->withInput()
-                ->withErrors(['error' => $response->json('message') ?? 'Gagal memperbarui data mahasiswa']);
+            return back()->withInput()->withErrors(['error' => $response->json('message') ?? 'Gagal memperbarui data mahasiswa']);
         } catch (\Exception $e) {
             return back()->withInput()->withErrors(['error' => 'Terjadi kesalahan: ' . $e->getMessage()]);
         }
@@ -165,18 +170,14 @@ class ProdiMahasiswaController extends Controller
         $token = Session::get('token');
 
         try {
-            $response = Http::withToken($token)
-                ->post("{$this->baseUrl}/mahasiswa/{$id}?_method=DELETE");
+            $response = Http::withToken($token)->post("{$this->baseUrl}/mahasiswa/{$id}?_method=DELETE");
 
             if ($response->successful()) {
-                return redirect()->route('prodi.mahasiswa.index')
-                    ->with('success', 'Data mahasiswa berhasil dihapus');
+                return redirect()->route('prodi.mahasiswa.index')->with('success', 'Data mahasiswa berhasil dihapus');
             }
-
             if ($response->status() === 401) {
                 return redirect()->route('login')->withErrors(['login' => 'Sesi berakhir, silakan login ulang.']);
             }
-
             return back()->withErrors(['error' => $response->json('message') ?? 'Gagal menghapus data mahasiswa']);
         } catch (\Exception $e) {
             return back()->withErrors(['error' => 'Terjadi kesalahan: ' . $e->getMessage()]);

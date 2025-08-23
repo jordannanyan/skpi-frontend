@@ -5,25 +5,45 @@ namespace App\Http\Controllers\Mahasiswa;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Session;
 
 class MahasiswaSertifikasiController extends Controller
 {
-    protected $baseUrl;
+    protected string $baseUrl;
 
     public function __construct()
     {
         $this->baseUrl = 'http://127.0.0.1:8000/api';
     }
 
+    /** Get id_mahasiswa from session->id when role=mahasiswa */
+    private function getMahasiswaId(): ?int
+    {
+        if (Session::get('role') !== 'mahasiswa') return null;
+        $id = Session::get('id'); // set at login as id_mahasiswa
+        return is_numeric($id) ? (int) $id : null;
+    }
+
     public function index()
     {
+        $token = Session::get('token');
+        $mhsId = $this->getMahasiswaId();
+        if (!$mhsId) return back()->with('error', 'ID Mahasiswa tidak ditemukan di sesi.');
+
         try {
-            $response = Http::get("{$this->baseUrl}/sertifikasi");
+            $response = Http::withToken($token)->get("{$this->baseUrl}/sertifikasi", [
+                'id_mahasiswa' => $mhsId, // /sertifikasi?id_mahasiswa=...
+            ]);
+
+            if ($response->status() === 401) {
+                return redirect()->route('login')->withErrors(['login' => 'Sesi berakhir, silakan login ulang.']);
+            }
+
             if ($response->successful()) {
-                $data = $response->json('data');
+                $data = $response->json('data') ?? [];
                 return view('mahasiswa.sertifikasi.index', compact('data'));
             }
-            return back()->with('error', 'Gagal mengambil data sertifikasi');
+            return back()->with('error', $response->json('message') ?? 'Gagal mengambil data sertifikasi');
         } catch (\Exception $e) {
             return back()->with('error', $e->getMessage());
         }
@@ -31,8 +51,18 @@ class MahasiswaSertifikasiController extends Controller
 
     public function create()
     {
+        $token = Session::get('token');
+        $mhsId = $this->getMahasiswaId();
+        if (!$mhsId) return back()->with('error', 'ID Mahasiswa tidak ditemukan di sesi.');
+
         try {
-            $mahasiswa = Http::get("{$this->baseUrl}/mahasiswa")->json('data');
+            // (Opsional) kirim data diri sendiri ke view jika diperlukan
+            $mhsResp = Http::withToken($token)->get("{$this->baseUrl}/mahasiswa/{$mhsId}");
+            if ($mhsResp->status() === 401) {
+                return redirect()->route('login')->withErrors(['login' => 'Sesi berakhir, silakan login ulang.']);
+            }
+            $mahasiswa = $mhsResp->successful() ? [$mhsResp->json('data')] : [];
+
             return view('mahasiswa.sertifikasi.create', compact('mahasiswa'));
         } catch (\Exception $e) {
             return back()->with('error', $e->getMessage());
@@ -41,43 +71,38 @@ class MahasiswaSertifikasiController extends Controller
 
     public function store(Request $request)
     {
+        $token = Session::get('token');
+        $mhsId = $this->getMahasiswaId();
+        if (!$mhsId) return back()->with('error', 'ID Mahasiswa tidak ditemukan di sesi.');
+
+        // id_mahasiswa diambil dari session (bukan dari form)
         $validated = $request->validate([
-            'id_mahasiswa' => 'required',
-            'nama_sertifikasi' => 'required|string',
-            'kategori_sertifikasi' => 'required|string',
-            'file_sertifikat' => 'nullable|file|mimes:pdf,jpg,jpeg,png|max:2048'
+            'nama_sertifikasi'      => 'required|string',
+            'kategori_sertifikasi'  => 'required|string',
+            'file_sertifikat'       => 'nullable|file|mimes:pdf,jpg,jpeg,png|max:2048',
         ]);
 
         try {
-            $multipart = [
-                [
-                    'name' => 'id_mahasiswa',
-                    'contents' => $validated['id_mahasiswa'],
-                ],
-                [
-                    'name' => 'nama_sertifikasi',
-                    'contents' => $validated['nama_sertifikasi'],
-                ],
-                [
-                    'name' => 'kategori_sertifikasi',
-                    'contents' => $validated['kategori_sertifikasi'],
-                ],
-            ];
+            $req = Http::withToken($token)->asMultipart();
 
             if ($request->hasFile('file_sertifikat')) {
-                $multipart[] = [
-                    'name' => 'file_sertifikat',
-                    'contents' => fopen($request->file('file_sertifikat')->getPathname(), 'r'),
-                    'filename' => $request->file('file_sertifikat')->getClientOriginalName(),
-                ];
+                $file = $request->file('file_sertifikat');
+                $req  = $req->attach('file_sertifikat', fopen($file->getPathname(), 'r'), $file->getClientOriginalName());
             }
 
-            $response = Http::attach($multipart)->post("{$this->baseUrl}/sertifikasi", []);
+            $response = $req->post("{$this->baseUrl}/sertifikasi", [
+                'id_mahasiswa'         => $mhsId,
+                'nama_sertifikasi'     => $validated['nama_sertifikasi'],
+                'kategori_sertifikasi' => $validated['kategori_sertifikasi'],
+            ]);
 
+            if ($response->status() === 401) {
+                return redirect()->route('login')->withErrors(['login' => 'Sesi berakhir, silakan login ulang.']);
+            }
             if ($response->successful()) {
                 return redirect()->route('mahasiswa.sertifikasi.index')->with('success', 'Sertifikasi berhasil ditambahkan');
             }
-            return back()->with('error', 'Gagal menambahkan sertifikasi');
+            return back()->with('error', $response->json('message') ?? 'Gagal menambahkan sertifikasi');
         } catch (\Exception $e) {
             return back()->with('error', $e->getMessage());
         }
@@ -85,9 +110,26 @@ class MahasiswaSertifikasiController extends Controller
 
     public function edit($id)
     {
+        $token = Session::get('token');
+        $mhsId = $this->getMahasiswaId();
+        if (!$mhsId) return back()->with('error', 'ID Mahasiswa tidak ditemukan di sesi.');
+
         try {
-            $sertifikasi = Http::get("{$this->baseUrl}/sertifikasi/{$id}")->json('data');
-            $mahasiswa = Http::get("{$this->baseUrl}/mahasiswa")->json('data');
+            $sertResp = Http::withToken($token)->get("{$this->baseUrl}/sertifikasi/{$id}", [
+                'id_mahasiswa' => $mhsId,
+            ]);
+            $mhsResp  = Http::withToken($token)->get("{$this->baseUrl}/mahasiswa/{$mhsId}");
+
+            if ($sertResp->status() === 401 || $mhsResp->status() === 401) {
+                return redirect()->route('login')->withErrors(['login' => 'Sesi berakhir, silakan login ulang.']);
+            }
+            if (!$sertResp->successful()) {
+                return back()->with('error', 'Gagal mengambil data sertifikasi');
+            }
+
+            $sertifikasi = $sertResp->json('data') ?? [];
+            $mahasiswa   = $mhsResp->successful() ? [$mhsResp->json('data')] : [];
+
             return view('mahasiswa.sertifikasi.edit', compact('sertifikasi', 'mahasiswa'));
         } catch (\Exception $e) {
             return back()->with('error', $e->getMessage());
@@ -96,47 +138,38 @@ class MahasiswaSertifikasiController extends Controller
 
     public function update(Request $request, $id)
     {
+        $token = Session::get('token');
+        $mhsId = $this->getMahasiswaId();
+        if (!$mhsId) return back()->with('error', 'ID Mahasiswa tidak ditemukan di sesi.');
+
         $validated = $request->validate([
-            'id_mahasiswa' => 'required',
-            'nama_sertifikasi' => 'required|string',
-            'kategori_sertifikasi' => 'required|string',
-            'file_sertifikat' => 'nullable|file|mimes:pdf,jpg,jpeg,png|max:2048'
+            'nama_sertifikasi'      => 'required|string',
+            'kategori_sertifikasi'  => 'required|string',
+            'file_sertifikat'       => 'nullable|file|mimes:pdf,jpg,jpeg,png|max:2048',
         ]);
 
         try {
-            $multipart = [
-                [
-                    'name' => 'id_mahasiswa',
-                    'contents' => $validated['id_mahasiswa'],
-                ],
-                [
-                    'name' => 'nama_sertifikasi',
-                    'contents' => $validated['nama_sertifikasi'],
-                ],
-                [
-                    'name' => 'kategori_sertifikasi',
-                    'contents' => $validated['kategori_sertifikasi'],
-                ],
-                [
-                    'name' => '_method',
-                    'contents' => 'PUT',
-                ],
-            ];
+            $req = Http::withToken($token)->asMultipart();
 
             if ($request->hasFile('file_sertifikat')) {
-                $multipart[] = [
-                    'name' => 'file_sertifikat',
-                    'contents' => fopen($request->file('file_sertifikat')->getPathname(), 'r'),
-                    'filename' => $request->file('file_sertifikat')->getClientOriginalName(),
-                ];
+                $file = $request->file('file_sertifikat');
+                $req  = $req->attach('file_sertifikat', fopen($file->getPathname(), 'r'), $file->getClientOriginalName());
             }
 
-            $response = Http::attach($multipart)->post("{$this->baseUrl}/sertifikasi/{$id}", []);
+            $response = $req->post("{$this->baseUrl}/sertifikasi/{$id}", [
+                '_method'              => 'PUT',
+                'id_mahasiswa'         => $mhsId,
+                'nama_sertifikasi'     => $validated['nama_sertifikasi'],
+                'kategori_sertifikasi' => $validated['kategori_sertifikasi'],
+            ]);
 
+            if ($response->status() === 401) {
+                return redirect()->route('login')->withErrors(['login' => 'Sesi berakhir, silakan login ulang.']);
+            }
             if ($response->successful()) {
                 return redirect()->route('mahasiswa.sertifikasi.index')->with('success', 'Sertifikasi berhasil diperbarui');
             }
-            return back()->with('error', 'Gagal memperbarui sertifikasi');
+            return back()->with('error', $response->json('message') ?? 'Gagal memperbarui sertifikasi');
         } catch (\Exception $e) {
             return back()->with('error', $e->getMessage());
         }
@@ -144,12 +177,24 @@ class MahasiswaSertifikasiController extends Controller
 
     public function destroy($id)
     {
+        $token = Session::get('token');
+        $mhsId = $this->getMahasiswaId();
+        if (!$mhsId) return back()->with('error', 'ID Mahasiswa tidak ditemukan di sesi.');
+
         try {
-            $response = Http::delete("{$this->baseUrl}/sertifikasi/{$id}");
+            // Use method override so backend receives id_mahasiswa in body
+            $response = Http::withToken($token)->asForm()->post("{$this->baseUrl}/sertifikasi/{$id}", [
+                '_method'      => 'DELETE',
+                'id_mahasiswa' => $mhsId,
+            ]);
+
+            if ($response->status() === 401) {
+                return redirect()->route('login')->withErrors(['login' => 'Sesi berakhir, silakan login ulang.']);
+            }
             if ($response->successful()) {
                 return redirect()->route('mahasiswa.sertifikasi.index')->with('success', 'Sertifikasi berhasil dihapus');
             }
-            return back()->with('error', 'Gagal menghapus sertifikasi');
+            return back()->with('error', $response->json('message') ?? 'Gagal menghapus sertifikasi');
         } catch (\Exception $e) {
             return back()->with('error', $e->getMessage());
         }

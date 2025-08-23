@@ -9,49 +9,109 @@ use Illuminate\Support\Facades\Session;
 
 class FakultasPengajuanController extends Controller
 {
-    protected $baseUrl;
+    protected string $baseUrl;
 
     public function __construct()
     {
         $this->baseUrl = 'http://127.0.0.1:8000/api/pengajuan';
     }
 
+    /** Ambil id_fakultas dari session->id saat role=fakultas */
+    private function getFakultasId(): ?int
+    {
+        if (Session::get('role') !== 'fakultas') return null;
+        $id = Session::get('id'); // diset saat login sebagai id_fakultas
+        return is_numeric($id) ? (int) $id : null;
+    }
+
     public function index()
     {
-        $response = Http::get($this->baseUrl);
-        $data = $response->json('data');
+        $token      = Session::get('token');
+        $fakultasId = $this->getFakultasId();
+        if (!$fakultasId) return back()->withErrors(['error' => 'ID Fakultas tidak ditemukan di sesi.']);
+
+        $response = Http::withToken($token)->get($this->baseUrl, [
+            'id_fakultas' => $fakultasId, // /api/pengajuan?id_fakultas=...
+        ]);
+
+        if ($response->status() === 401) {
+            return redirect()->route('login')->withErrors(['login' => 'Sesi berakhir, silakan login ulang.']);
+        }
+
+        $data = $response->successful() ? ($response->json('data') ?? []) : [];
         return view('fakultas.pengajuan.index', compact('data'));
     }
 
     public function create()
     {
-        $mahasiswa = Http::get('http://127.0.0.1:8000/api/mahasiswa')->json('data');
-        $kategori = Http::get('http://127.0.0.1:8000/api/kategori')->json('data');
+        $token      = Session::get('token');
+        $fakultasId = $this->getFakultasId();
+        if (!$fakultasId) return back()->withErrors(['error' => 'ID Fakultas tidak ditemukan di sesi.']);
+
+        // Ambil mahasiswa di bawah fakultas ini
+        $mhsResp = Http::withToken($token)->get('http://127.0.0.1:8000/api/mahasiswa', [
+            'id_fakultas' => $fakultasId,
+        ]);
+        // Kategori global
+        $katResp = Http::withToken($token)->get('http://127.0.0.1:8000/api/kategori');
+
+        if ($mhsResp->status() === 401 || $katResp->status() === 401) {
+            return redirect()->route('login')->withErrors(['login' => 'Sesi berakhir, silakan login ulang.']);
+        }
+        if (!$mhsResp->successful() || !$katResp->successful()) {
+            return back()->withErrors(['error' => 'Gagal memuat data mahasiswa atau kategori']);
+        }
+
+        $mahasiswa = $mhsResp->json('data') ?? [];
+        $kategori  = $katResp->json('data') ?? [];
 
         return view('fakultas.pengajuan.create', compact('mahasiswa', 'kategori'));
     }
 
     public function store(Request $request)
     {
+        $token      = Session::get('token');
+        $fakultasId = $this->getFakultasId();
+        if (!$fakultasId) return back()->withInput()->withErrors(['error' => 'ID Fakultas tidak ditemukan di sesi.']);
+
         $validated = $request->validate([
-            'id_mahasiswa' => 'required|numeric',
-            'id_kategori' => 'required|numeric',
-            'status' => 'required|in:aktif,noaktif',
-            'tgl_pengajuan' => 'required|date'
+            'id_mahasiswa'  => 'required|numeric',
+            'id_kategori'   => 'required|numeric',
+            'status'        => 'required|in:aktif,noaktif',
+            'tgl_pengajuan' => 'required|date',
         ]);
 
-        $response = Http::post($this->baseUrl, $validated);
+        $payload = $validated + ['id_fakultas' => $fakultasId];
+
+        $response = Http::withToken($token)->post($this->baseUrl, $payload);
+
+        if ($response->status() === 401) {
+            return redirect()->route('login')->withErrors(['login' => 'Sesi berakhir, silakan login ulang.']);
+        }
+        if (!$response->successful()) {
+            return back()->withInput()->withErrors(['error' => $response->json('message') ?? 'Gagal menambahkan data pengajuan']);
+        }
 
         return redirect()->route('fakultas.pengajuan.index')->with('success', 'Data pengajuan berhasil ditambahkan');
     }
 
     public function show($id)
     {
-        // jika butuh token: ->withToken(Session::get('token'))
-        $resp = Http::get("{$this->baseUrl}/{$id}");
+        $token      = Session::get('token');
+        $fakultasId = $this->getFakultasId();
+        if (!$fakultasId) return redirect()->route('fakultas.pengajuan.index')
+            ->withErrors(['error' => 'ID Fakultas tidak ditemukan di sesi.']);
+
+        $resp = Http::withToken($token)->get("{$this->baseUrl}/{$id}", [
+            'id_fakultas' => $fakultasId,
+        ]);
+
+        if ($resp->status() === 401) {
+            return redirect()->route('login')->withErrors(['login' => 'Sesi berakhir, silakan login ulang.']);
+        }
         if (!$resp->successful()) {
             return redirect()->route('fakultas.pengajuan.index')
-                ->withErrors(['error' => 'Gagal memuat detail pengajuan']);
+                ->withErrors(['error' => $resp->json('message') ?? 'Gagal memuat detail pengajuan']);
         }
 
         $pengajuan = $resp->json('data') ?? [];
@@ -60,7 +120,7 @@ class FakultasPengajuanController extends Controller
         $prodi = null;
         $idProdi = data_get($pengajuan, 'mahasiswa.id_prodi');
         if ($idProdi) {
-            $prodiResp = Http::get("http://127.0.0.1:8000/api/prodi/{$idProdi}");
+            $prodiResp = Http::withToken($token)->get("http://127.0.0.1:8000/api/prodi/{$idProdi}");
             if ($prodiResp->successful()) {
                 $prodi = $prodiResp->json('data');
             }
@@ -71,30 +131,79 @@ class FakultasPengajuanController extends Controller
 
     public function edit($id)
     {
-        $pengajuan = Http::get("{$this->baseUrl}/{$id}")->json('data');
-        $mahasiswa = Http::get('http://127.0.0.1:8000/api/mahasiswa')->json('data');
-        $kategori = Http::get('http://127.0.0.1:8000/api/kategori')->json('data');
+        $token      = Session::get('token');
+        $fakultasId = $this->getFakultasId();
+        if (!$fakultasId) return back()->withErrors(['error' => 'ID Fakultas tidak ditemukan di sesi.']);
+
+        $pengResp = Http::withToken($token)->get("{$this->baseUrl}/{$id}", [
+            'id_fakultas' => $fakultasId,
+        ]);
+        $mhsResp = Http::withToken($token)->get('http://127.0.0.1:8000/api/mahasiswa', [
+            'id_fakultas' => $fakultasId,
+        ]);
+        $katResp = Http::withToken($token)->get('http://127.0.0.1:8000/api/kategori');
+
+        if ($pengResp->status() === 401 || $mhsResp->status() === 401 || $katResp->status() === 401) {
+            return redirect()->route('login')->withErrors(['login' => 'Sesi berakhir, silakan login ulang.']);
+        }
+        if (!$pengResp->successful() || !$mhsResp->successful() || !$katResp->successful()) {
+            return back()->withErrors(['error' => 'Gagal memuat data untuk edit pengajuan']);
+        }
+
+        $pengajuan = $pengResp->json('data') ?? [];
+        $mahasiswa = $mhsResp->json('data') ?? [];
+        $kategori  = $katResp->json('data') ?? [];
 
         return view('fakultas.pengajuan.edit', compact('pengajuan', 'mahasiswa', 'kategori'));
     }
 
     public function update(Request $request, $id)
     {
+        $token      = Session::get('token');
+        $fakultasId = $this->getFakultasId();
+        if (!$fakultasId) return back()->withInput()->withErrors(['error' => 'ID Fakultas tidak ditemukan di sesi.']);
+
         $validated = $request->validate([
-            'id_mahasiswa' => 'required|numeric',
-            'id_kategori' => 'required|numeric',
-            'status' => 'required|in:aktif,noaktif',
-            'tgl_pengajuan' => 'required|date'
+            'id_mahasiswa'  => 'required|numeric',
+            'id_kategori'   => 'required|numeric',
+            'status'        => 'required|in:aktif,noaktif',
+            'tgl_pengajuan' => 'required|date',
         ]);
 
-        $response = Http::asForm()->post("{$this->baseUrl}/{$id}?_method=PUT", $validated);
+        $payload = $validated + ['id_fakultas' => $fakultasId];
+
+        $response = Http::withToken($token)
+            ->asForm()
+            ->post("{$this->baseUrl}/{$id}?_method=PUT", $payload);
+
+        if ($response->status() === 401) {
+            return redirect()->route('login')->withErrors(['login' => 'Sesi berakhir, silakan login ulang.']);
+        }
+        if (!$response->successful()) {
+            return back()->withInput()->withErrors(['error' => $response->json('message') ?? 'Gagal memperbarui data pengajuan']);
+        }
 
         return redirect()->route('fakultas.pengajuan.index')->with('success', 'Data pengajuan berhasil diperbarui');
     }
 
     public function destroy($id)
     {
-        $response = Http::asForm()->post("{$this->baseUrl}/{$id}?_method=DELETE");
+        $token      = Session::get('token');
+        $fakultasId = $this->getFakultasId();
+        if (!$fakultasId) return back()->withErrors(['error' => 'ID Fakultas tidak ditemukan di sesi.']);
+
+        $response = Http::withToken($token)
+            ->asForm()
+            ->post("{$this->baseUrl}/{$id}?_method=DELETE", [
+                'id_fakultas' => $fakultasId,
+            ]);
+
+        if ($response->status() === 401) {
+            return redirect()->route('login')->withErrors(['login' => 'Sesi berakhir, silakan login ulang.']);
+        }
+        if (!$response->successful()) {
+            return back()->withErrors(['error' => $response->json('message') ?? 'Gagal menghapus data pengajuan']);
+        }
 
         return redirect()->route('fakultas.pengajuan.index')->with('success', 'Data pengajuan berhasil dihapus');
     }
