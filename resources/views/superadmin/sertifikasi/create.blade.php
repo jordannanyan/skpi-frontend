@@ -50,8 +50,8 @@
             </div>
 
             <div class="form-group">
-                <label>Kategori Sertifikasi</label>
-                <select name="kategori_sertifikasi" class="form-control" required>
+                <label for="kategori_sertifikasi">Kategori Sertifikasi</label>
+                <select id="kategori_sertifikasi" name="kategori_sertifikasi" class="form-control" required>
                     <option value="">-- Pilih Kategori --</option>
                     @php $oldCat = old('kategori_sertifikasi'); @endphp
                     <option value="KEAHLIAN" {{ $oldCat === 'KEAHLIAN' ? 'selected' : '' }}>KEAHLIAN</option>
@@ -68,9 +68,10 @@
             </div>
 
             <div class="form-group">
-                <label>File Sertifikat</label>
-                <input type="file" name="file_sertifikat" class="form-control">
+                <label for="file_sertifikat" id="fileLabel">File Sertifikat</label>
+                <input type="file" id="file_sertifikat" name="file_sertifikat" class="form-control">
             </div>
+
             <button type="submit" class="btn btn-success">Simpan</button>
             <a href="{{ route('superadmin.sertifikasi.index') }}" class="btn btn-secondary">Kembali</a>
         </div>
@@ -81,6 +82,7 @@
 @section('js')
 <script>
     $(function () {
+        // Inisialisasi Select2
         $('.select2').select2({
             theme: 'bootstrap4',
             width: 'resolve',
@@ -88,7 +90,6 @@
             placeholder: function(){
                 return $(this).data('placeholder') || 'Cari...';
             },
-            // pencarian "contains"
             matcher: function(params, data) {
                 if ($.trim(params.term) === '') { return data; }
                 if (typeof data.text === 'undefined') { return null; }
@@ -97,6 +98,21 @@
                 return text.indexOf(term) > -1 ? data : null;
             }
         });
+
+        // Ubah label File Sertifikat kalau pilih "PENGALAMAN ORGANISASI"
+        function updateFileLabel() {
+            if ($('#kategori_sertifikasi').val() === 'PENGALAMAN ORGANISASI') {
+                $('#fileLabel').text('File Sertifikat/SK Organisasi');
+            } else {
+                $('#fileLabel').text('File Sertifikat');
+            }
+        }
+
+        // jalankan saat halaman load
+        updateFileLabel();
+
+        // jalankan saat kategori berubah
+        $('#kategori_sertifikasi').on('change', updateFileLabel);
     });
 </script>
 @endsection

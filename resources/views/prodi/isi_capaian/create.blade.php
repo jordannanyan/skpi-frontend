@@ -21,7 +21,7 @@
                     <select name="id_cpl_skor" class="form-control" required>
                         <option value="">-- Pilih Mahasiswa --</option>
                         @foreach ($cplSkorList as $skor)
-                            <option value="{{ $skor['id_cpl_skor'] }}">{{ $skor['skor_cpl']. " " . $skor['mahasiswa']['nama_mahasiswa'] ?? '-' }}</option>
+                            <option value="{{ $skor['id_cpl_skor'] }}">{{ $skor['skor_cpl']. " ".$skor["cpl"]["nama_cpl"]. " - " . $skor['mahasiswa']['nama_mahasiswa'] ?? '-' }}</option>
                         @endforeach
                     </select>
                 </div>
