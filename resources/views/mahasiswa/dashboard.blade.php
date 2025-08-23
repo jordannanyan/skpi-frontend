@@ -42,14 +42,14 @@ if ($token && $mhsId) {
         }
 
         // Check Kerja Praktek documents
-        $respKerjaPraktek = Http::withToken($token)->get("$api/kerja-praktek");
+        $respKerjaPraktek = Http::withToken($token)->get("$api/kerja_praktek");
         if ($respKerjaPraktek->successful()) {
             $listKerjaPraktek = collect($respKerjaPraktek->json('data') ?? []);
             $jumlahKerjaPraktek = $listKerjaPraktek->where('id_mahasiswa', $mhsId)->count();
         }
 
         // Check Tugas Akhir documents
-        $respTugasAkhir = Http::withToken($token)->get("$api/tugas-akhir");
+        $respTugasAkhir = Http::withToken($token)->get("$api/tugas_akhir");
         if ($respTugasAkhir->successful()) {
             $listTugasAkhir = collect($respTugasAkhir->json('data') ?? []);
             $jumlahTugasAkhir = $listTugasAkhir->where('id_mahasiswa', $mhsId)->count();
@@ -150,10 +150,10 @@ if ($token && $mhsId) {
                 <a href="{{ route('mahasiswa.sertifikasi.index') }}" class="btn btn-info mr-2">
                     <i class="fas fa-certificate"></i> Upload Sertifikasi
                 </a>
-                <a href="{{ route('mahasiswa.kerja-praktek.index') }}" class="btn btn-success mr-2">
+                <a href="{{ route('mahasiswa.kerja_praktek.index') }}" class="btn btn-success mr-2">
                     <i class="fas fa-briefcase"></i> Upload Kerja Praktek
                 </a>
-                <a href="{{ route('mahasiswa.tugas-akhir.index') }}" class="btn btn-warning">
+                <a href="{{ route('mahasiswa.tugas_akhir.index') }}" class="btn btn-warning">
                     <i class="fas fa-graduation-cap"></i> Upload Tugas Akhir
                 </a>
             </div>
