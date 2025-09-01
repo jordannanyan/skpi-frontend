@@ -19,7 +19,7 @@
 @php
 use Illuminate\Support\Facades\Http;
 
-$api = 'http://127.0.0.1:8000/api';
+$api = env('API_BASE_URL', 'http://127.0.0.1:8000/api');
 $token = session('token');
 $mhsId = session('id');
 
@@ -31,55 +31,75 @@ $jumlahTugasAkhir = 0;
 $totalDokumen = 0;
 $err = null;
 
+// Data grafik CPL
+$cplLabels = [];
+$cplScores = [];
 
 if ($token && $mhsId) {
-    try {
-        // Check Sertifikasi documents
-        $respSertifikasi = Http::withToken($token)->get("$api/sertifikasi");
-        if ($respSertifikasi->successful()) {
-            $listSertifikasi = collect($respSertifikasi->json('data') ?? []);
-            $jumlahSertifikasi = $listSertifikasi->where('id_mahasiswa', $mhsId)->count();
-        }
+try {
+// Sertifikasi
+$respSertifikasi = Http::withToken($token)->get("$api/sertifikasi");
+if ($respSertifikasi->successful()) {
+$listSertifikasi = collect($respSertifikasi->json('data') ?? []);
+$jumlahSertifikasi = $listSertifikasi->where('id_mahasiswa', $mhsId)->count();
+}
 
-        // Check Kerja Praktek documents
-        $respKerjaPraktek = Http::withToken($token)->get("$api/kerja_praktek");
-        if ($respKerjaPraktek->successful()) {
-            $listKerjaPraktek = collect($respKerjaPraktek->json('data') ?? []);
-            $jumlahKerjaPraktek = $listKerjaPraktek->where('id_mahasiswa', $mhsId)->count();
-        }
+// Kerja Praktek (endpoint: kerja-praktek)
+$respKerjaPraktek = Http::withToken($token)->get("$api/kerja-praktek");
+if ($respKerjaPraktek->successful()) {
+$listKerjaPraktek = collect($respKerjaPraktek->json('data') ?? []);
+$jumlahKerjaPraktek = $listKerjaPraktek->where('id_mahasiswa', $mhsId)->count();
+}
 
-        // Check Tugas Akhir documents
-        $respTugasAkhir = Http::withToken($token)->get("$api/tugas_akhir");
-        if ($respTugasAkhir->successful()) {
-            $listTugasAkhir = collect($respTugasAkhir->json('data') ?? []);
-            $jumlahTugasAkhir = $listTugasAkhir->where('id_mahasiswa', $mhsId)->count();
-        }
+// Tugas Akhir (endpoint: tugas-akhir)
+$respTugasAkhir = Http::withToken($token)->get("$api/tugas-akhir");
+if ($respTugasAkhir->successful()) {
+$listTugasAkhir = collect($respTugasAkhir->json('data') ?? []);
+$jumlahTugasAkhir = $listTugasAkhir->where('id_mahasiswa', $mhsId)->count();
+}
 
-        $totalDokumen = $jumlahSertifikasi + $jumlahKerjaPraktek + $jumlahTugasAkhir;
+$totalDokumen = $jumlahSertifikasi + $jumlahKerjaPraktek + $jumlahTugasAkhir;
 
-        // Check pengajuan - only prodi can create pengajuan for mahasiswa
-        $respPeng = Http::withToken($token)->get("$api/pengajuan");
-        if ($respPeng->successful()) {
-            $listPeng = collect($respPeng->json('data') ?? []);
-            
-            // Get pengajuan for this student (should only be created by prodi)
-            $pengajuan = $listPeng
-                ->where('id_mahasiswa', $mhsId)
-                ->sortByDesc(fn($x) => $x['tgl_pengajuan'] ?? $x['created_at'] ?? '')
-                ->first();
-        }
+// Pengajuan (ambil semua, filter milik mahasiswa ini)
+$respPeng = Http::withToken($token)->get("$api/pengajuan");
+if ($respPeng->successful()) {
+$listPeng = collect($respPeng->json('data') ?? []);
+$pengajuan = $listPeng
+->where('id_mahasiswa', $mhsId)
+->sortByDesc(fn($x) => $x['tgl_pengajuan'] ?? $x['created_at'] ?? '')
+->first();
+}
 
-        // Get pengesahan if pengajuan exists
-        if ($pengajuan) {
-            $respSah = Http::withToken($token)->get("$api/pengesahan");
-            if ($respSah->successful()) {
-                $listSah = collect($respSah->json('data') ?? []);
-                $pengesahan = $listSah->firstWhere('id_pengajuan', $pengajuan['id_pengajuan'] ?? null);
-            }
-        }
-    } catch (\Throwable $e) {
-        $err = 'Terjadi kesalahan: ' . $e->getMessage();
-    }
+// Pengesahan untuk pengajuan ini (jika ada)
+if ($pengajuan) {
+$respSah = Http::withToken($token)->get("$api/pengesahan");
+if ($respSah->successful()) {
+$listSah = collect($respSah->json('data') ?? []);
+$pengesahan = $listSah->firstWhere('id_pengajuan', $pengajuan['id_pengajuan'] ?? null);
+}
+}
+
+// ====== Ambil skor CPL untuk grafik ======
+$respCpl = Http::withToken($token)->get("$api/cpl-skor", [
+'id_mahasiswa' => $mhsId,
+]);
+if ($respCpl->successful()) {
+$rows = $respCpl->json('data') ?? [];
+foreach ($rows as $row) {
+// Label prioritas: kode -> nama -> fallback
+$label = data_get($row, 'cpl_master.kode')
+?: data_get($row, 'cpl_master.nama')
+?: ('CPL #' . (data_get($row, 'id_cpl_master') ?? ''));
+$score = (float) ($row['skor_cpl'] ?? 0);
+$cplLabels[] = $label;
+$cplScores[] = $score;
+}
+}
+// =========================================
+
+} catch (\Throwable $e) {
+$err = 'Terjadi kesalahan: ' . $e->getMessage();
+}
 }
 @endphp
 
@@ -88,7 +108,7 @@ if ($token && $mhsId) {
 @endif
 
 <div class="row">
-    {{-- Document Summary Card --}}
+    {{-- Ringkasan Dokumen --}}
     <div class="col-md-12">
         <div class="card card-outline card-info">
             <div class="card-header">
@@ -132,74 +152,66 @@ if ($token && $mhsId) {
     </div>
 </div>
 
+{{-- ===== Grafik CPL (SKPI) ===== --}}
 <div class="row">
-    {{-- Document Requirement Warning --}}
-    @if($totalDokumen < 1)
+    <div class="col-md-12">
+        <div class="card card-outline card-primary">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h3 class="card-title">Grafik CPL (SKPI)</h3>
+                @if(count($cplLabels))
+                <span class="badge badge-primary">Total CPL: {{ count($cplLabels) }}</span>
+                @endif
+            </div>
+            <div class="card-body">
+@if(count($cplLabels))
+  <canvas id="cplChart" height="160"
+          data-labels='@json($cplLabels)'
+          data-scores='@json($cplScores)'></canvas>
+@else
+  <p class="text-muted mb-0">Belum ada skor CPL yang tercatat.</p>
+@endif
+
+            </div>
+        </div>
+    </div>
+</div>
+{{-- ============================= --}}
+
+<div class="row">
+    {{-- Status Pengajuan SKPI --}}
+    @if(!$pengajuan)
+    <div class="col-md-12">
+        <div class="alert alert-info">
+            <h5><i class="icon fas fa-info-circle"></i> Status Pengajuan SKPI</h5>
+            <p>Belum ada pengajuan SKPI yang dibuat oleh Program Studi untuk Anda.</p>
+            <p><small class="text-muted">Pengajuan SKPI hanya dapat dilakukan oleh Program Studi.</small></p>
+        </div>
+    </div>
+    @elseif($pengajuan && !$pengesahan)
     <div class="col-md-12">
         <div class="alert alert-warning">
-            <h5><i class="icon fas fa-exclamation-triangle"></i> Dokumen Pendukung Belum Lengkap</h5>
-            <p>Anda belum mengunggah dokumen pendukung SKPI. Program Studi memerlukan minimal satu dokumen untuk dapat membuat pengajuan SKPI.</p>
-            <p><strong>Dokumen yang dapat diunggah:</strong></p>
-            <ul>
-                <li>Sertifikasi/Prestasi ({{ $jumlahSertifikasi }} dokumen)</li>
-                <li>Kerja Praktek ({{ $jumlahKerjaPraktek }} dokumen)</li>
-                <li>Tugas Akhir ({{ $jumlahTugasAkhir }} dokumen)</li>
-            </ul>
-            <p><small class="text-muted">Harap lengkapi dokumen-dokumen tersebut agar Program Studi dapat memproses pengajuan SKPI Anda.</small></p>
-            <div class="mt-2">
-                <a href="{{ route('mahasiswa.sertifikasi.index') }}" class="btn btn-info mr-2">
-                    <i class="fas fa-certificate"></i> Upload Sertifikasi
-                </a>
-                <a href="{{ route('mahasiswa.kerja_praktek.index') }}" class="btn btn-success mr-2">
-                    <i class="fas fa-briefcase"></i> Upload Kerja Praktek
-                </a>
-                <a href="{{ route('mahasiswa.tugas_akhir.index') }}" class="btn btn-warning">
-                    <i class="fas fa-graduation-cap"></i> Upload Tugas Akhir
-                </a>
-            </div>
+            <h5><i class="icon fas fa-university"></i> Pengajuan SKPI oleh Program Studi</h5>
+            <p><strong>Tanggal Pengajuan:</strong> {{ $pengajuan['tgl_pengajuan'] ?? '-' }}</p>
+            <p><strong>Kategori:</strong> {{ data_get($pengajuan, 'kategori.nama_kategori', '-') }}</p>
+            <p>Program Studi telah membuat pengajuan SKPI untuk Anda.</p>
+            <small class="text-muted">Status: Menunggu pengesahan fakultas.</small>
+        </div>
+    </div>
+    @elseif($pengajuan && $pengesahan)
+    <div class="col-md-12">
+        <div class="alert alert-success">
+            <h5><i class="icon fas fa-check-circle"></i> SKPI Telah Selesai</h5>
+            <p><strong>Tanggal Pengajuan:</strong> {{ $pengajuan['tgl_pengajuan'] ?? '-' }}</p>
+            <p><strong>Tanggal Pengesahan:</strong> {{ $pengesahan['tgl_pengesahan'] ?? '-' }}</p>
+            <p><strong>Kategori:</strong> {{ data_get($pengajuan, 'kategori.nama_kategori', '-') }}</p>
+            <p><strong>Nomor Pengesahan:</strong> {{ $pengesahan['nomor_pengesahan'] ?? '-' }}</p>
+            <p>SKPI Anda telah disahkan oleh {{ data_get($pengesahan, 'fakultas.nama_fakultas', 'Fakultas') }}.</p>
         </div>
     </div>
     @endif
 </div>
 
-<div class="row">
-    {{-- Status Pengajuan SKPI --}}
-    @if(!$pengajuan)
-        <div class="col-md-12">
-            <div class="alert alert-info">
-                <h5><i class="icon fas fa-info-circle"></i> Status Pengajuan SKPI</h5>
-                <p>Belum ada pengajuan SKPI yang dibuat oleh Program Studi untuk Anda.</p>
-                <p><small class="text-muted">
-                    Pengajuan SKPI hanya dapat dilakukan oleh Program Studi. 
-                    Silakan hubungi Program Studi Anda jika membutuhkan pengajuan SKPI.
-                </small></p>
-            </div>
-        </div>
-    @elseif($pengajuan && !$pengesahan)
-        <div class="col-md-12">
-            <div class="alert alert-warning">
-                <h5><i class="icon fas fa-university"></i> Pengajuan SKPI oleh Program Studi</h5>
-                <p><strong>Tanggal Pengajuan:</strong> {{ $pengajuan['tgl_pengajuan'] ?? '-' }}</p>
-                <p><strong>Kategori:</strong> {{ data_get($pengajuan, 'kategori.nama_kategori', '-') }}</p>
-                <p>Program Studi telah membuat pengajuan SKPI untuk Anda.</p>
-                <small class="text-muted">Status: Menunggu pengesahan fakultas.</small>
-            </div>
-        </div>
-    @elseif($pengajuan && $pengesahan)
-        <div class="col-md-12">
-            <div class="alert alert-success">
-                <h5><i class="icon fas fa-check-circle"></i> SKPI Telah Selesai</h5>
-                <p><strong>Tanggal Pengajuan:</strong> {{ $pengajuan['tgl_pengajuan'] ?? '-' }}</p>
-                <p><strong>Tanggal Pengesahan:</strong> {{ $pengesahan['tgl_pengesahan'] ?? '-' }}</p>
-                <p><strong>Kategori:</strong> {{ data_get($pengajuan, 'kategori.nama_kategori', '-') }}</p>
-                <p><strong>Nomor Pengesahan:</strong> {{ $pengesahan['nomor_pengesahan'] ?? '-' }}</p>
-                <p>SKPI Anda telah selesai diproses dan disahkan oleh {{ data_get($pengesahan, 'fakultas.nama_fakultas', 'Fakultas') }}.</p>
-            </div>
-        </div>
-    @endif
-</div>
-
-{{-- TIMELINE ala AdminLTE --}}
+{{-- Timeline --}}
 @if($pengajuan)
 <div class="row">
     <div class="col-md-12">
@@ -212,23 +224,16 @@ if ($token && $mhsId) {
             </div>
             <div class="card-body">
                 <div class="timeline">
-
-                    {{-- Step 1: Pengajuan dibuat --}}
                     <div>
                         <i class="fas fa-file-alt bg-green"></i>
                         <div class="timeline-item">
                             <span class="time"><i class="fas fa-clock"></i> {{ $pengajuan['tgl_pengajuan'] ?? '-' }}</span>
-                            <h3 class="timeline-header">
-                                Pengajuan SKPI Dibuat oleh Program Studi
-                            </h3>
+                            <h3 class="timeline-header">Pengajuan SKPI Dibuat oleh Program Studi</h3>
                             <div class="timeline-body">
-                                Pengajuan SKPI kategori <strong>{{ data_get($pengajuan, 'kategori.nama_kategori', '-') }}</strong> 
-                                telah dibuat oleh Program Studi.
+                                Pengajuan SKPI kategori <strong>{{ data_get($pengajuan, 'kategori.nama_kategori', '-') }}</strong> telah dibuat.
                             </div>
                         </div>
                     </div>
-
-                    {{-- Step 2: Menunggu Pengesahan Fakultas --}}
                     @if(!$pengesahan)
                     <div>
                         <i class="fas fa-hourglass-half bg-warning"></i>
@@ -241,8 +246,6 @@ if ($token && $mhsId) {
                         </div>
                     </div>
                     @endif
-
-                    {{-- Step 3: SKPI selesai --}}
                     @if($pengesahan)
                     <div>
                         <i class="fas fa-trophy bg-success"></i>
@@ -257,17 +260,76 @@ if ($token && $mhsId) {
                         </div>
                     </div>
                     @endif
-
                     @if(!$pengesahan)
                     <div>
                         <i class="fas fa-clock bg-gray"></i>
                     </div>
                     @endif
-
                 </div>
             </div>
         </div>
     </div>
 </div>
 @endif
+@endsection
+
+@section('js')
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+  const el = document.getElementById('cplChart');
+  if (!el) return;
+
+  let labels = [];
+  let scores = [];
+  try {
+    labels = JSON.parse(el.dataset.labels || '[]');
+    scores = JSON.parse(el.dataset.scores || '[]');
+  } catch(e) {
+    console.error('Parse data CPL gagal:', e);
+    return;
+  }
+  if (!Array.isArray(labels) || labels.length === 0) return;
+
+  const ctx = el.getContext('2d');
+  if (!ctx) return;
+
+  new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [{
+        label: 'Skor CPL',
+        data: scores,
+        // opsional: uncomment kalau mau isi bar semi-transparan
+        // backgroundColor: 'rgba(54, 162, 235, 0.5)',
+        // borderColor: 'rgba(54, 162, 235, 1)',
+        borderWidth: 1
+      }]
+    },
+    options: {
+      responsive: true,
+      animation: { duration: 300 },
+      scales: {
+        y: {
+          beginAtZero: true,
+          suggestedMax: 100,
+          ticks: { precision: 0 }
+        },
+        x: {
+          ticks: {
+            autoSkip: false,
+            maxRotation: 60,
+            minRotation: 0
+          }
+        }
+      },
+      plugins: {
+        legend: { display: true },
+        tooltip: { enabled: true }
+      }
+    }
+  });
+});
+</script>
 @endsection

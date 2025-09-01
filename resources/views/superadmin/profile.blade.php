@@ -19,14 +19,31 @@
           <div class="col-md-6">
             <label class="form-label">Username</label>
             <input type="text" name="username" class="form-control"
-                   value="{{ old('username', $admin['username'] ?? '') }}" required>
+                   value="{{ old('username', $admin['username'] ?? '') }}" required autocomplete="username">
           </div>
+
+          {{-- Bagian ubah password, opsional --}}
           <div class="col-md-6">
-            <label class="form-label">Password (biarkan kosong jika tidak diganti)</label>
-            <input type="password" name="password" class="form-control" autocomplete="new-password">
+            <label class="form-label">Password baru <small class="text-muted">(biarkan kosong jika tidak diganti)</small></label>
+            <input type="password" name="password" class="form-control"
+                   autocomplete="new-password" id="password_new">
+          </div>
+
+          <div class="col-md-6">
+            <label class="form-label">Konfirmasi password baru</label>
+            <input type="password" name="password_confirmation" class="form-control"
+                   autocomplete="new-password" id="password_confirm">
+          </div>
+
+          {{-- WAJIB diisi kalau mau ganti password --}}
+          <div class="col-md-6">
+            <label class="form-label">Password saat ini <small class="text-muted">(wajib bila mengganti password)</small></label>
+            <input type="password" name="current_password" class="form-control"
+                   autocomplete="current-password" id="password_current">
           </div>
         </div>
       </div>
+
       <div class="card-footer">
         <button class="btn btn-primary"><i class="fas fa-save"></i> Simpan</button>
         <a href="{{ url('/superadmin/dashboard') }}" class="btn btn-secondary">Batal</a>
@@ -34,3 +51,21 @@
     </form>
   </div>
 @stop
+
+@push('js')
+<script>
+  // Client-side hint: kalau password baru diisi, wajibkan current_password & konfirmasi
+  const newPwd = document.getElementById('password_new');
+  const curPwd = document.getElementById('password_current');
+  const confPwd = document.getElementById('password_confirm');
+
+  function toggleRequirements() {
+    const required = newPwd.value.length > 0;
+    curPwd.required = required;
+    confPwd.required = required;
+  }
+
+  newPwd.addEventListener('input', toggleRequirements);
+  document.addEventListener('DOMContentLoaded', toggleRequirements);
+</script>
+@endpush

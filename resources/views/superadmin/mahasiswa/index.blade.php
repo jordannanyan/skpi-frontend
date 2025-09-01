@@ -20,6 +20,40 @@
 <div class="alert alert-danger">{{ $errors->first() }}</div>
 @endif
 
+{{-- ... di dalam @section('content') setelah alert success/error --}}
+
+{{-- Card Import Mahasiswa --}}
+<div class="card mb-3">
+  <div class="card-body">
+    <form method="POST" action="{{ route('superadmin.mahasiswa.import') }}" enctype="multipart/form-data">
+      @csrf
+      <div class="row g-2 align-items-end">
+        <div class="col-md-5 col-lg-4">
+          <label class="form-label">File Import (.csv)</label>
+          <input type="file" name="file" class="form-control" accept=".csv,.xlsx,.xls" required>
+        </div>
+        <div class="col-auto">
+          <button class="btn btn-success">
+            <i class="fas fa-file-upload"></i> Import
+          </button>
+        </div>
+        <div class="col-auto">
+          <a href="{{ route('superadmin.mahasiswa.template') }}" class="btn btn-outline-secondary">
+            <i class="fas fa-download"></i> Download Template
+          </a>
+        </div>
+      </div>
+      <small class="text-muted d-block mt-2">
+        Kolom yang didukung: <code>nim_mahasiswa, nama_mahasiswa, username, id_prodi, tgl_masuk (YYYY-MM-DD), tempat_lahir, tanggal_lahir (YYYY-MM-DD), no_telp, alamat, password</code>.
+        Ukuran maksimum 2 MB.
+      </small>
+    </form>
+  </div>
+</div>
+
+{{-- Card daftar mahasiswa yang sudah ada tetap di bawahnya --}}
+
+
 <div class="card">
     <div class="card-body">
         <table class="table table-bordered">

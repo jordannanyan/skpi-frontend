@@ -12,7 +12,7 @@
 @if($errors->any())
 <div class="alert alert-danger">{{ $errors->first() }}</div>
 @endif
-<form action="{{ route('mahasiswa.pengesahan.store') }}" method="POST">
+<form action="{{ route('fakultas.pengesahan.store') }}" method="POST">
     @csrf
     <div class="card">
         <div class="card-body">
@@ -55,7 +55,7 @@
                 <input type="date" name="tgl_pengesahan" class="form-control" required>
             </div>
             <button class="btn btn-success">Simpan</button>
-            <a href="{{ route('mahasiswa.pengesahan.index') }}" class="btn btn-secondary">Kembali</a>
+            <a href="{{ route('fakultas.pengesahan.index') }}" class="btn btn-secondary">Kembali</a>
         </div>
     </div>
 </form>

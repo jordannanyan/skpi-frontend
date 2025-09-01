@@ -62,14 +62,19 @@ class AppServiceProvider extends ServiceProvider
                     ],
                     ['header' => 'Manajemen Akademik'],
                     [
-                        'text' => 'Kelola CPL',
-                        'url'  => 'superadmin/cpl-skor',
-                        'icon' => 'fas fa-star-half-alt',
+                        'text' => 'Kelola Kategori CPL',
+                        'url'  => 'superadmin/cpl',
+                        'icon' => 'fas fa-list',
                     ],
                     [
-                        'text' => 'Kelola Isi Capaian',
-                        'url'  => 'superadmin/isi-capaian',
-                        'icon' => 'fas fa-list-alt',
+                        'text' => 'Kelola CPL Master',
+                        'url'  => 'superadmin/cpl-master',
+                        'icon' => 'fas fa-list',
+                    ],
+                    [
+                        'text' => 'Kelola CPL',
+                        'url'  => 'superadmin/cpl-nilai',
+                        'icon' => 'fas fa-star-half-alt',
                     ],
 
                     ['header' => 'Manajemen SKPI'],
@@ -94,54 +99,9 @@ class AppServiceProvider extends ServiceProvider
                         'url'  => '/fakultas/dashboard',
                         'icon' => 'fas fa-tachometer-alt',
                     ],
-
-                    // ['header' => 'Manajemen Akun'],
-                    // [
-                    //     'text' => 'Kelola Mahasiswa',
-                    //     'url'  => 'fakultas/mahasiswa',
-                    //     'icon' => 'fas fa-user-graduate',
-                    // ],
-                    // [
-                    //     'text' => 'Kelola Prodi',
-                    //     'url'  => 'fakultas/prodi',
-                    //     'icon' => 'fas fa-building',
-                    // ],
-                    // ['header' => 'Aktivitas Akademik'],
-                    // [
-                    //     'text' => 'Kelola Tugas Akhir',
-                    //     'url'  => 'fakultas/tugas-akhir',
-                    //     'icon' => 'fas fa-book',
-                    // ],
-                    // [
-                    //     'text' => 'Kelola Kerja Praktek',
-                    //     'url'  => 'fakultas/kerja-praktek',
-                    //     'icon' => 'fas fa-briefcase',
-                    // ],
-                    // [
-                    //     'text' => 'Kelola Sertifikasi',
-                    //     'url'  => 'fakultas/sertifikasi',
-                    //     'icon' => 'fas fa-certificate',
-                    // ],
-                    // ['header' => 'Manajemen Akademik'],
-                    // [
-                    //     'text' => 'Kelola CPL',
-                    //     'url'  => 'fakultas/cpl',
-                    //     'icon' => 'fas fa-tasks',
-                    // ],
-                    // [
-                    //     'text' => 'Kelola CPL Skor',
-                    //     'url'  => 'fakultas/cpl-skor',
-                    //     'icon' => 'fas fa-star-half-alt',
-                    // ],
-                    // [
-                    //     'text' => 'Kelola Isi Capaian',
-                    //     'url'  => 'fakultas/isi-capaian',
-                    //     'icon' => 'fas fa-list-alt',
-                    // ],
-
                     ['header' => 'Manajemen SKPI'],
                     [
-                        'text' => 'Kelola Pengajuan SKPI',
+                        'text' => 'Daftar Pengajuan SKPI',
                         'url'  => 'fakultas/pengajuan',
                         'icon' => 'fas fa-paper-plane',
                     ],
@@ -186,13 +146,8 @@ class AppServiceProvider extends ServiceProvider
                     ['header' => 'Manajemen Akademik'],
                     [
                         'text' => 'Kelola CPL',
-                        'url'  => 'prodi/cpl-skor',
+                        'url'  => 'prodi/cpl-nilai',
                         'icon' => 'fas fa-star-half-alt',
-                    ],
-                    [
-                        'text' => 'Kelola Isi Capaian',
-                        'url'  => 'prodi/isi-capaian',
-                        'icon' => 'fas fa-list-alt',
                     ],
 
                     ['header' => 'Manajemen SKPI'],

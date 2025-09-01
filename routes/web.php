@@ -20,6 +20,10 @@ use App\Http\Controllers\Superadmin\PengesahanController;
 use App\Http\Controllers\Superadmin\TugasAkhirController;
 use App\Http\Controllers\Superadmin\KerjaPraktekController;
 use App\Http\Controllers\Superadmin\SertifikasiController;
+use App\Http\Controllers\Superadmin\CplMasterController;
+use App\Http\Controllers\Superadmin\CplNilaiController;
+
+
 
 use App\Http\Controllers\Fakultas\FakultasMahasiswaController;
 use App\Http\Controllers\Fakultas\FakultasProdiController;
@@ -42,6 +46,8 @@ use App\Http\Controllers\Prodi\ProdiPengajuanController;
 use App\Http\Controllers\Prodi\ProdiTugasAkhirController;
 use App\Http\Controllers\Prodi\ProdiKerjaPraktekController;
 use App\Http\Controllers\Prodi\ProdiSertifikasiController;
+use App\Http\Controllers\Prodi\ProdiCplNilaiController;
+
 
 use App\Http\Controllers\Mahasiswa\MahasiswaPengajuanController;
 use App\Http\Controllers\Mahasiswa\MahasiswaTugasAkhirController;
@@ -114,10 +120,10 @@ Route::post('/logout', function () {
 })->name('logout');
 
 // ========== DASHBOARD ==========
-Route::get('/superadmin/dashboard', fn () => view('superadmin.dashboard'))->middleware('web');
-Route::get('/fakultas/dashboard',   fn () => view('fakultas.dashboard'))->middleware('web');
-Route::get('/prodi/dashboard',      fn () => view('prodi.dashboard'))->middleware('web');
-Route::get('/mahasiswa/dashboard',  fn () => view('mahasiswa.dashboard'))->middleware('web');
+Route::get('/superadmin/dashboard', fn() => view('superadmin.dashboard'))->middleware('web');
+Route::get('/fakultas/dashboard',   fn() => view('fakultas.dashboard'))->middleware('web');
+Route::get('/prodi/dashboard',      fn() => view('prodi.dashboard'))->middleware('web');
+Route::get('/mahasiswa/dashboard',  fn() => view('mahasiswa.dashboard'))->middleware('web');
 
 
 Route::prefix('superadmin')->name('superadmin.')->group(function () {
@@ -145,14 +151,21 @@ Route::prefix('mahasiswa')->name('mahasiswa.')->group(function () {
 
 
 
-Route::prefix('superadmin/mahasiswa')->name('superadmin.mahasiswa.')->group(function () {
-    Route::get('/', [MahasiswaController::class, 'index'])->name('index');
-    Route::get('/create', [MahasiswaController::class, 'create'])->name('create');
-    Route::post('/', [MahasiswaController::class, 'store'])->name('store');
-    Route::get('/{id}/edit', [MahasiswaController::class, 'edit'])->name('edit');
-    Route::put('/{id}', [MahasiswaController::class, 'update'])->name('update'); 
-    Route::delete('/{id}', [MahasiswaController::class, 'destroy'])->name('destroy');
-});
+Route::prefix('superadmin/mahasiswa')
+    ->name('superadmin.mahasiswa.')
+    ->group(function () {
+        Route::get('/', [MahasiswaController::class, 'index'])->name('index');
+        Route::get('/create', [MahasiswaController::class, 'create'])->name('create');
+        Route::post('/', [MahasiswaController::class, 'store'])->name('store');
+
+        Route::get('/{id}/edit', [MahasiswaController::class, 'edit'])->name('edit');
+        Route::put('/{id}', [MahasiswaController::class, 'update'])->name('update');
+        Route::delete('/{id}', [MahasiswaController::class, 'destroy'])->name('destroy');
+
+        // ✅ Import
+        Route::get('/import-template', [MahasiswaController::class, 'template'])->name('template');
+        Route::post('/import', [MahasiswaController::class, 'import'])->name('import');
+    });
 
 
 Route::prefix('superadmin/fakultas')->name('superadmin.fakultas.')->group(function () {
@@ -183,6 +196,22 @@ Route::prefix('superadmin/cpl')->name('superadmin.cpl.')->group(function () {
     Route::put('/{id}', [CplController::class, 'update'])->name('update'); // uses _method=PUT
     Route::delete('/{id}/delete', [CplController::class, 'destroy'])->name('destroy'); // uses _method=DELETE
 });
+
+Route::prefix('superadmin/cpl-master')->name('superadmin.cpl-master.')->group(function () {
+    Route::get('/', [CplMasterController::class, 'index'])->name('index');
+    Route::get('/create', [CplMasterController::class, 'create'])->name('create');
+    Route::post('/', [CplMasterController::class, 'store'])->name('store');
+    Route::get('/{id}/edit', [CplMasterController::class, 'edit'])->name('edit');
+    Route::put('/{id}', [CplMasterController::class, 'update'])->name('update'); // uses _method=PUT
+    Route::delete('/{id}/delete', [CplMasterController::class, 'destroy'])->name('destroy'); // uses _method=DELETE
+});
+
+Route::prefix('superadmin/cpl-nilai')->name('superadmin.cpl-nilai.')->group(function () {
+    Route::get('/', [CplNilaiController::class, 'index'])->name('index');                     // pilih prodi & mahasiswa
+    Route::get('/m/{id_mahasiswa}', [CplNilaiController::class, 'form'])->name('form');       // form input skor
+    Route::post('/m/{id_mahasiswa}', [CplNilaiController::class, 'submit'])->name('submit');  // submit bulk
+});
+
 
 Route::prefix('superadmin/cpl-skor')->name('superadmin.cpl_skor.')->group(function () {
     Route::get('/', [CplSkorController::class, 'index'])->name('index');
@@ -273,7 +302,7 @@ Route::prefix('fakultas/mahasiswa')->name('fakultas.mahasiswa.')->group(function
     Route::get('/create', [FakultasMahasiswaController::class, 'create'])->name('create');
     Route::post('/', [FakultasMahasiswaController::class, 'store'])->name('store');
     Route::get('/{id}/edit', [FakultasMahasiswaController::class, 'edit'])->name('edit');
-    Route::put('/{id}', [FakultasMahasiswaController::class, 'update'])->name('update'); 
+    Route::put('/{id}', [FakultasMahasiswaController::class, 'update'])->name('update');
     Route::delete('/{id}', [FakultasMahasiswaController::class, 'destroy'])->name('destroy');
 });
 
@@ -378,7 +407,7 @@ Route::prefix('prodi/mahasiswa')->name('prodi.mahasiswa.')->group(function () {
     Route::get('/create', [ProdiMahasiswaController::class, 'create'])->name('create');
     Route::post('/', [ProdiMahasiswaController::class, 'store'])->name('store');
     Route::get('/{id}/edit', [ProdiMahasiswaController::class, 'edit'])->name('edit');
-    Route::put('/{id}', [ProdiMahasiswaController::class, 'update'])->name('update'); 
+    Route::put('/{id}', [ProdiMahasiswaController::class, 'update'])->name('update');
     Route::delete('/{id}', [ProdiMahasiswaController::class, 'destroy'])->name('destroy');
 });
 
@@ -391,23 +420,14 @@ Route::prefix('prodi/cpl')->name('prodi.cpl.')->group(function () {
     Route::delete('/{id}/delete', [ProdiCplController::class, 'destroy'])->name('destroy'); // uses _method=DELETE
 });
 
-Route::prefix('prodi/cpl-skor')->name('prodi.cpl_skor.')->group(function () {
-    Route::get('/', [ProdiCplSkorController::class, 'index'])->name('index');
-    Route::get('/create', [ProdiCplSkorController::class, 'create'])->name('create');
-    Route::post('/', [ProdiCplSkorController::class, 'store'])->name('store');
-    Route::get('/{id}/edit', [ProdiCplSkorController::class, 'edit'])->name('edit');
-    Route::put('/{id}', [ProdiCplSkorController::class, 'update'])->name('update');
-    Route::delete('/{id}', [ProdiCplSkorController::class, 'destroy'])->name('destroy');
+
+Route::prefix('prodi/cpl-nilai')->name('prodi.cpl-nilai.')->group(function () {
+    Route::get('/', [ProdiCplNilaiController::class, 'index'])->name('index');
+    Route::get('/m/{id_mahasiswa}', [ProdiCplNilaiController::class, 'form'])->name('form');
+    Route::post('/m/{id_mahasiswa}', [ProdiCplNilaiController::class, 'submit'])->name('submit');
+    Route::get('/m/{id_mahasiswa}/detail', [ProdiCplNilaiController::class, 'detail'])->name('detail'); // ⬅️ NEW
 });
 
-Route::prefix('prodi/isi-capaian')->name('prodi.isi_capaian.')->group(function () {
-    Route::get('/', [ProdiIsiCapaianController::class, 'index'])->name('index');
-    Route::get('/create', [ProdiIsiCapaianController::class, 'create'])->name('create');
-    Route::post('/', [ProdiIsiCapaianController::class, 'store'])->name('store');
-    Route::get('/{id}/edit', [ProdiIsiCapaianController::class, 'edit'])->name('edit');
-    Route::put('/{id}', [ProdiIsiCapaianController::class, 'update'])->name('update');
-    Route::delete('/{id}', [ProdiIsiCapaianController::class, 'destroy'])->name('destroy');
-});
 
 Route::prefix('prodi/kategori')->name('prodi.kategori.')->group(function () {
     Route::get('/', [ProdiKategoriController::class, 'index'])->name('index');

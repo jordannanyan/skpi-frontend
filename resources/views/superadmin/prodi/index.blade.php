@@ -1,7 +1,8 @@
 @extends('adminlte::page')
 
 @section('title', 'Kelola Prodi')
-@include('superadmin.partials.header')
+
+@include('fakultas.partials.header')
 
 
 @section('content_header')
