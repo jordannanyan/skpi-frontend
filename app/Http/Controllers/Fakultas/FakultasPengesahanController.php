@@ -214,26 +214,7 @@ class FakultasPengesahanController extends Controller
         ]);
 
         try {
-            // 1) Pre-check: apakah pengajuan ini sudah punya pengesahan?
-            //    (Menghindari duplikasi di UI; race condition tetap dijaga oleh API)
-            $check = Http::withToken($token)->get("{$this->baseUrl}/pengesahan", [
-                'id_pengajuan' => $validated['id_pengajuan'],
-            ]);
-
-            if ($check->status() === 401) {
-                return redirect()->route('login')->withErrors(['login' => 'Sesi berakhir, silakan login ulang.']);
-            }
-
-            if ($check->successful()) {
-                $exists = collect($check->json('data') ?? [])->isNotEmpty();
-                if ($exists) {
-                    return back()
-                        ->withInput()
-                        ->withErrors(['error' => 'Pengajuan ini sudah memiliki data pengesahan.']);
-                }
-            }
-
-            // 2) Lanjut simpan
+            // Langsung submit ke API (tanpa precheck)
             $payload  = $validated + ['id_fakultas' => $fakultasId];
             $response = Http::withToken($token)->post("{$this->baseUrl}/pengesahan", $payload);
 
@@ -241,25 +222,25 @@ class FakultasPengesahanController extends Controller
                 return redirect()->route('login')->withErrors(['login' => 'Sesi berakhir, silakan login ulang.']);
             }
 
-            // 3) Tangani 409 dari API (jaga-jaga race condition)
+            // Tangani race/duplikasi (API harus kirim 409)
             if ($response->status() === 409) {
                 return back()
                     ->withInput()
                     ->withErrors(['error' => $response->json('message') ?? 'Pengajuan ini sudah memiliki pengesahan.']);
             }
 
-            if ($response->failed()) {
-                // Tangkap pesan validasi 422 bila ada
-                if ($response->status() === 422) {
-                    $apiErrors = $response->json('errors') ?? [];
-                    $first = null;
-                    if (is_array($apiErrors) && !empty($apiErrors)) {
-                        $firstField = reset($apiErrors);
-                        $first = is_array($firstField) ? reset($firstField) : (is_string($firstField) ? $firstField : null);
-                    }
-                    return back()->withInput()->withErrors(['error' => $first ?: ($response->json('message') ?? 'Validasi gagal')]);
+            // Tangani validasi dari API
+            if ($response->status() === 422) {
+                $apiErrors = $response->json('errors') ?? [];
+                $first = null;
+                if (is_array($apiErrors) && !empty($apiErrors)) {
+                    $firstField = reset($apiErrors);
+                    $first = is_array($firstField) ? reset($firstField) : (is_string($firstField) ? $firstField : null);
                 }
+                return back()->withInput()->withErrors(['error' => $first ?: ($response->json('message') ?? 'Validasi gagal')]);
+            }
 
+            if ($response->failed()) {
                 return back()->withInput()->withErrors(['error' => $response->json('message') ?? 'Gagal menambahkan data']);
             }
 
@@ -268,6 +249,7 @@ class FakultasPengesahanController extends Controller
             return back()->withInput()->withErrors(['error' => 'Terjadi kesalahan: ' . $e->getMessage()]);
         }
     }
+
 
 
     public function edit($id)
